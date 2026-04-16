@@ -1,5 +1,5 @@
 import { GoogleGenAI, Modality } from "@google/genai";
-import { DiagnosticResult } from "../types";
+import { DiagnosticResult, WeatherData } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
@@ -24,14 +24,21 @@ export const chatWithAI = async (message: string, language: string, history: { r
   return response.text;
 };
 
-export const analyzePlantImage = async (base64Image: string): Promise<DiagnosticResult> => {
+export const analyzePlantImage = async (base64Image: string, weather?: WeatherData): Promise<DiagnosticResult> => {
+  let weatherContext = "";
+  if (weather) {
+    weatherContext = `Note sur la météo actuelle à ${weather.location}: température ${weather.temp}°C, humidité ${weather.humidity}%, pluviométrie ${weather.rainfall}mm.`;
+  }
+
   const prompt = `Analyse cette photo de plante. 
   Identifie la maladie, le parasite ou le stress (hydrique/nutritionnel).
+  ${weatherContext}
+  Prends en compte les conditions météo pour affiner ton diagnostic.
   Réponds au format JSON suivant:
   {
     "disease": "Nom de la maladie ou du problème",
     "confidence": 0.95,
-    "description": "Description courte du problème observé",
+    "description": "Description courte et contextualisée du problème",
     "treatment": "Traitement recommandé (bio ou chimique)",
     "prevention": "Conseils pour éviter que cela ne se reproduise"
   }`;

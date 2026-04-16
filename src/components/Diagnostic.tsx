@@ -2,12 +2,15 @@ import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Camera, Upload, RefreshCw, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { analyzePlantImage } from '../services/gemini';
-import { DiagnosticResult } from '../types';
+import { getWeatherData } from '../services/weather';
+import { DiagnosticResult, WeatherData } from '../types';
+import { PILOT_ZONES } from '../constants';
 
 export default function Diagnostic() {
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<DiagnosticResult | null>(null);
+  const [location, setLocation] = useState(PILOT_ZONES[0]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,8 +29,9 @@ export default function Diagnostic() {
     if (!image) return;
     setIsAnalyzing(true);
     try {
+      const weather = await getWeatherData(location);
       const base64 = image.split(',')[1];
-      const diagnostic = await analyzePlantImage(base64);
+      const diagnostic = await analyzePlantImage(base64, weather);
       setResult(diagnostic);
     } catch (error) {
       console.error(error);
@@ -45,11 +49,24 @@ export default function Diagnostic() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-serif italic">Diagnostic Photo</h2>
-        {image && (
-          <button onClick={reset} className="text-xs text-[#1a1a1a]/50 flex items-center gap-1">
-            <RefreshCw size={12} /> Réinitialiser
-          </button>
-        )}
+        <div className="flex gap-2">
+          {PILOT_ZONES.map(zone => (
+            <button
+              key={zone}
+              onClick={() => setLocation(zone)}
+              className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all ${
+                location === zone ? 'bg-[#5A5A40] text-white' : 'text-[#1a1a1a]/40 bg-white border border-[#1a1a1a]/10'
+              }`}
+            >
+              {zone[0]}
+            </button>
+          ))}
+          {image && (
+            <button onClick={reset} className="text-xs text-[#1a1a1a]/50 p-1">
+              <RefreshCw size={12} />
+            </button>
+          )}
+        </div>
       </div>
 
       {!image ? (
