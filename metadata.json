@@ -1,0 +1,9 @@
+{
+  "name": "TooluBaay",
+  "description": "Plateforme numérique d'accompagnement agricole avec chatbot IA multilingue, diagnostic par photo et météo localisée.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": []
+}
