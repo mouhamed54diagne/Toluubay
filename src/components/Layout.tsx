@@ -1,6 +1,8 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Home, CloudSun, Calendar, MessageSquare, Camera, ClipboardList } from 'lucide-react';
+import { Home, CloudSun, Calendar, MessageSquare, Camera, ClipboardList, LogOut } from 'lucide-react';
+import { auth } from '../lib/firebase';
+import { signOut } from 'firebase/auth';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -18,13 +20,30 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
     { id: 'log', icon: ClipboardList, label: 'Carnet' },
   ];
 
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f5f5f0] text-[#1a1a1a] font-sans pb-20">
       <header className="bg-white border-b border-[#1a1a1a]/10 p-4 sticky top-0 z-50">
         <div className="flex items-center justify-between max-w-md mx-auto">
           <h1 className="text-2xl font-serif italic text-[#5A5A40]">TooluBaay</h1>
-          <div className="w-8 h-8 rounded-full bg-[#5A5A40] flex items-center justify-center text-white text-xs">
-            JD
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handleLogout}
+              className="p-2 text-[#1a1a1a]/30 hover:text-red-400 transition-colors"
+              title="Déconnexion"
+            >
+              <LogOut size={18} />
+            </button>
+            <div className="w-8 h-8 rounded-full bg-[#5A5A40] flex items-center justify-center text-white text-xs font-bold ring-2 ring-[#5A5A40]/10">
+              {auth.currentUser?.displayName?.substring(0, 2).toUpperCase() || 'JD'}
+            </div>
           </div>
         </div>
       </header>

@@ -5,11 +5,11 @@ import { chatWithAI, textToSpeech, transcribeAudio } from '../services/gemini';
 import { ChatMessage } from '../types';
 import { LOCAL_LANGUAGES } from '../constants';
 import FeedbackModule from './FeedbackModule';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
 
 export default function Chatbot() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'model', content: 'Salam! Je suis TooluBaay, votre conseiller agricole. Comment puis-je vous aider aujourd\'hui ?' }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [language, setLanguage] = useState(LOCAL_LANGUAGES[0].name);
@@ -17,6 +17,27 @@ export default function Chatbot() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const path = `users/${user.uid}/chatHistory`;
+    const q = query(collection(db, path), orderBy('timestamp', 'asc'), limit(50));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => doc.data() as ChatMessage);
+      if (data.length === 0) {
+        setMessages([{ role: 'model', content: "Salam! Je suis TooluBaay, votre conseiller agricole. Comment puis-je vous aider aujourd'hui ?" }]);
+      } else {
+        setMessages(data);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -78,24 +99,45 @@ export default function Chatbot() {
     }
   };
 
+  const saveMessage = async (msg: ChatMessage) => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const path = `users/${user.uid}/chatHistory`;
+    try {
+      await addDoc(collection(db, path), {
+        ...msg,
+        uid: user.uid,
+        timestamp: serverTimestamp()
+      });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.CREATE, path);
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
-    const userMessage = input;
+    const userMessageContent = input;
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    
+    // Save user message
+    const userMsg: ChatMessage = { role: 'user', content: userMessageContent };
+    await saveMessage(userMsg);
+
     setIsLoading(true);
 
     try {
       const history = messages.map(m => ({ role: m.role, content: m.content }));
-      const aiResponse = await chatWithAI(userMessage, language, history);
+      const aiResponse = await chatWithAI(userMessageContent, language, history);
       
       if (aiResponse) {
-        setMessages(prev => [...prev, { role: 'model', content: aiResponse }]);
+        const modelMsg: ChatMessage = { role: 'model', content: aiResponse };
+        await saveMessage(modelMsg);
       }
     } catch (error) {
       console.error(error);
-      setMessages(prev => [...prev, { role: 'model', content: "Désolé, j'ai rencontré une erreur. Réessayez plus tard." }]);
+      const errorMsg: ChatMessage = { role: 'model', content: "Désolé, j'ai rencontré une erreur. Réessayez plus tard." };
+      await saveMessage(errorMsg);
     } finally {
       setIsLoading(false);
     }

@@ -6,12 +6,16 @@ import { getWeatherData } from '../services/weather';
 import { DiagnosticResult, WeatherData } from '../types';
 import { PILOT_ZONES } from '../constants';
 import FeedbackModule from './FeedbackModule';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function Diagnostic() {
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<DiagnosticResult | null>(null);
   const [location, setLocation] = useState(PILOT_ZONES[0]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -21,6 +25,7 @@ export default function Diagnostic() {
       reader.onloadend = () => {
         setImage(reader.result as string);
         setResult(null);
+        setIsSaved(false);
       };
       reader.readAsDataURL(file);
     }
@@ -41,9 +46,35 @@ export default function Diagnostic() {
     }
   };
 
+  const handleSaveToLog = async () => {
+    if (!result || !image) return;
+    const user = auth.currentUser;
+    if (!user) return;
+
+    setIsSaving(true);
+    const path = `users/${user.uid}/fields`;
+    try {
+      await addDoc(collection(db, path), {
+        uid: user.uid,
+        date: new Date().toISOString().split('T')[0],
+        crop: 'arachide', // Default
+        location: location,
+        notes: `Diagnostic IA: ${result.disease}. ${result.description}`,
+        diagnostic: result,
+        createdAt: serverTimestamp()
+      });
+      setIsSaved(true);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.CREATE, path);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const reset = () => {
     setImage(null);
     setResult(null);
+    setIsSaved(false);
   };
 
   return (
@@ -167,10 +198,25 @@ export default function Diagnostic() {
                 </div>
 
                 <button 
-                  onClick={() => {/* Save to log logic */}}
-                  className="w-full bg-white border border-[#5A5A40] text-[#5A5A40] py-3 rounded-2xl text-sm font-bold"
+                  onClick={handleSaveToLog}
+                  disabled={isSaving || isSaved}
+                  className={`w-full py-3 rounded-2xl text-sm font-bold transition-all ${
+                    isSaved 
+                    ? 'bg-green-100 text-green-700 border border-green-200' 
+                    : 'bg-white border border-[#5A5A40] text-[#5A5A40]'
+                  }`}
                 >
-                  Enregistrer dans mon carnet
+                  {isSaving ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 size={16} className="animate-spin" /> Enregistrement...
+                    </div>
+                  ) : isSaved ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <CheckCircle2 size={16} /> Enregistré dans le carnet
+                    </div>
+                  ) : (
+                    "Enregistrer dans mon carnet"
+                  )}
                 </button>
               </motion.div>
             )}

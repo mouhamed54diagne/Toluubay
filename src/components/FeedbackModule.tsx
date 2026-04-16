@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { ThumbsUp, ThumbsDown, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { db, auth } from '../lib/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 interface FeedbackModuleProps {
   context: string;
@@ -8,13 +10,23 @@ interface FeedbackModuleProps {
 
 export default function FeedbackModule({ context }: FeedbackModuleProps) {
   const [submitted, setSubmitted] = useState(false);
-  const [feedback, setFeedback] = useState<'positive' | 'negative' | null>(null);
 
-  const handleFeedback = (type: 'positive' | 'negative') => {
-    setFeedback(type);
+  const handleFeedback = async (type: 'positive' | 'negative') => {
+    const user = auth.currentUser;
+    if (!user) return;
+
     setSubmitted(true);
-    // Here we would typically send this to a backend/analytics
-    console.log(`Feedback submitted for ${context}: ${type}`);
+    
+    try {
+      await addDoc(collection(db, 'feedback'), {
+        uid: user.uid,
+        context,
+        type,
+        timestamp: serverTimestamp()
+      });
+    } catch (e) {
+      console.error("Feedback failed to save", e);
+    }
   };
 
   return (
