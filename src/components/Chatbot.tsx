@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Mic, Volume2, User, Bot, Loader2 } from 'lucide-react';
-import { chatWithAI, textToSpeech } from '../services/gemini';
+import { Send, Mic, Volume2, User, Bot, Loader2, StopCircle } from 'lucide-react';
+import { chatWithAI, textToSpeech, transcribeAudio } from '../services/gemini';
 import { ChatMessage } from '../types';
 import { LOCAL_LANGUAGES } from '../constants';
 
@@ -14,12 +14,68 @@ export default function Chatbot() {
   const [language, setLanguage] = useState(LOCAL_LANGUAGES[0].name);
   const [isRecording, setIsRecording] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        await handleAudioProcess(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Error accessing microphone:", error);
+      alert("Impossible d'accéder au micro. Veuillez vérifier vos permissions.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const handleAudioProcess = async (blob: Blob) => {
+    setIsLoading(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = (reader.result as string).split(',')[1];
+        const transcription = await transcribeAudio(base64, language);
+        if (transcription) {
+          setInput(transcription);
+          // Auto-send could be placed here if desired
+        }
+      };
+      reader.readAsDataURL(blob);
+    } catch (error) {
+      console.error("Error transcribing audio:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -114,25 +170,24 @@ export default function Chatbot() {
 
       <div className="mt-4 bg-white rounded-3xl p-2 shadow-lg border border-[#1a1a1a]/5 flex items-center gap-2">
         <button 
-          onMouseDown={() => setIsRecording(true)}
-          onMouseUp={() => setIsRecording(false)}
-          className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+          onClick={isRecording ? stopRecording : startRecording}
+          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
             isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-[#f5f5f0] text-[#5A5A40]'
           }`}
         >
-          <Mic size={20} />
+          {isRecording ? <StopCircle size={20} /> : <Mic size={20} />}
         </button>
         <input 
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="Posez votre question..."
+          placeholder={isRecording ? "Parlez maintenant..." : "Posez votre question..."}
           className="flex-1 bg-transparent outline-none text-sm px-2"
         />
         <button 
           onClick={handleSend}
-          disabled={!input.trim() || isLoading}
+          disabled={!input.trim() || isLoading || isRecording}
           className="w-10 h-10 bg-[#5A5A40] text-white rounded-full flex items-center justify-center disabled:opacity-50"
         >
           <Send size={18} />
@@ -141,3 +196,4 @@ export default function Chatbot() {
     </div>
   );
 }
+

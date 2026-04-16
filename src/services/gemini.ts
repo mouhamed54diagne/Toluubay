@@ -62,6 +62,24 @@ export const analyzePlantImage = async (base64Image: string): Promise<Diagnostic
   }
 };
 
+export const transcribeAudio = async (base64Audio: string, language: string): Promise<string> => {
+  const prompt = `Transcris cet audio en texte. La langue parlée est le ${language}. 
+  Si l'audio contient une question agricole, transcris-la fidèlement. 
+  Réponds uniquement avec la transcription.`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: {
+      parts: [
+        { inlineData: { data: base64Audio, mimeType: "audio/webm" } },
+        { text: prompt }
+      ]
+    }
+  });
+
+  return response.text || "";
+};
+
 export const textToSpeech = async (text: string, language: string) => {
   // Note: Gemini TTS might not support all local languages perfectly, 
   // but we'll try with a general prompt.
