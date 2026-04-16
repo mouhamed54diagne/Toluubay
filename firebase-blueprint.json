@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "Profil Utilisateur",
+      "description": "Informations de base sur l'agriculteur.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "locations": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email"]
+    },
+    "FieldEntry": {
+      "title": "Carnet de Champ",
+      "description": "Un enregistrement d'activité ou d'observation dans une parcelle.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "crop": { "type": "string", "enum": ["arachide", "mil", "maïs", "riz"] },
+        "location": { "type": "string" },
+        "notes": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "diagnostic": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "date", "crop", "location"]
+    },
+    "ChatMessage": {
+      "title": "Conversation Chatbot",
+      "description": "Historique des échanges avec l'IA.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "model"] },
+        "content": { "type": "string" },
+        "language": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "role", "content"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Profils des utilisateurs."
+    },
+    "/users/{userId}/fields/{fieldId}": {
+      "schema": "FieldEntry",
+      "description": "Carnet de champs de l'utilisateur."
+    },
+    "/users/{userId}/chatHistory/{chatId}": {
+      "schema": "ChatMessage",
+      "description": "Historique de chat de l'utilisateur."
+    }
+  }
+}
