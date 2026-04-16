@@ -4,6 +4,7 @@ import { Send, Mic, Volume2, User, Bot, Loader2, StopCircle } from 'lucide-react
 import { chatWithAI, textToSpeech, transcribeAudio } from '../services/gemini';
 import { ChatMessage } from '../types';
 import { LOCAL_LANGUAGES } from '../constants';
+import FeedbackModule from './FeedbackModule';
 
 export default function Chatbot() {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -146,12 +147,15 @@ export default function Chatbot() {
                 }`}>
                   <p>{msg.content}</p>
                   {msg.role === 'model' && (
-                    <button 
-                      onClick={() => playAudio(msg.content)}
-                      className="mt-2 text-[#5A5A40] hover:opacity-70 transition-opacity"
-                    >
-                      <Volume2 size={16} />
-                    </button>
+                    <div className="flex flex-col gap-2 mt-2">
+                      <button 
+                        onClick={() => playAudio(msg.content)}
+                        className="w-fit text-[#5A5A40] hover:opacity-70 transition-opacity"
+                      >
+                        <Volume2 size={16} />
+                      </button>
+                      <FeedbackModule context={`chat_msg_${i}`} />
+                    </div>
                   )}
                 </div>
               </div>

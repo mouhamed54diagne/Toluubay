@@ -5,6 +5,7 @@ import { analyzePlantImage } from '../services/gemini';
 import { getWeatherData } from '../services/weather';
 import { DiagnosticResult, WeatherData } from '../types';
 import { PILOT_ZONES } from '../constants';
+import FeedbackModule from './FeedbackModule';
 
 export default function Diagnostic() {
   const [image, setImage] = useState<string | null>(null);
@@ -161,6 +162,8 @@ export default function Diagnostic() {
                       </div>
                     </div>
                   </div>
+                  
+                  <FeedbackModule context={`diagnostic_${result.disease}`} />
                 </div>
 
                 <button 

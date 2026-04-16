@@ -5,6 +5,7 @@ import { getWeatherData } from '../services/weather';
 import { generateIntelligentInsight } from '../services/gemini';
 import { WeatherData } from '../types';
 import { PILOT_ZONES, CROPS } from '../constants';
+import FeedbackModule from './FeedbackModule';
 
 export default function Dashboard({ onNavigate }: { onNavigate: (tab: string) => void }) {
   const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -67,6 +68,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (tab: string) =>
             <p className="text-sm leading-relaxed text-[#1a1a1a]/80 italic">
               {isLoadingInsight ? "Intersection des données en cours..." : insight || "Analyse indisponible."}
             </p>
+            {insight && !isLoadingInsight && <FeedbackModule context="dashboard_insight" />}
           </div>
 
           <div className="flex items-center gap-3">
