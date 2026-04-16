@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CloudSun, Wind, Droplets, Thermometer, MapPin } from 'lucide-react';
+import { CloudSun, Wind, Droplets, Thermometer, MapPin, Loader2 } from 'lucide-react';
 import { getWeatherData } from '../services/weather';
 import { WeatherData } from '../types';
 import { PILOT_ZONES } from '../constants';
@@ -7,9 +7,14 @@ import { PILOT_ZONES } from '../constants';
 export default function Weather() {
   const [location, setLocation] = useState(PILOT_ZONES[0]);
   const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getWeatherData(location).then(setWeather);
+    setLoading(true);
+    getWeatherData(location).then((data) => {
+      setWeather(data);
+      setLoading(false);
+    });
   }, [location]);
 
   const indicators = [
@@ -38,19 +43,28 @@ export default function Weather() {
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl p-8 shadow-sm border border-[#1a1a1a]/5 text-center">
-        <div className="flex justify-center mb-4">
-          <div className="w-20 h-20 bg-[#f5f5f0] rounded-3xl flex items-center justify-center">
-            <CloudSun size={48} className="text-[#5A5A40]" />
+      <div className="bg-white rounded-3xl p-8 shadow-sm border border-[#1a1a1a]/5 text-center relative overflow-hidden h-[240px] flex flex-col items-center justify-center">
+        {loading ? (
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="animate-spin text-[#5A5A40]" size={32} />
+            <p className="text-xs font-bold uppercase tracking-widest text-[#1a1a1a]/40">Actualisation...</p>
           </div>
-        </div>
-        <h3 className="text-4xl font-light tracking-tighter mb-1">{weather?.temp}°C</h3>
-        <p className="text-lg font-serif italic text-[#1a1a1a]/60 mb-6">{weather?.condition}</p>
-        
-        <div className="flex items-center justify-center gap-2 text-xs font-medium text-[#5A5A40]">
-          <MapPin size={14} />
-          <span>{weather?.location}, Sénégal</span>
-        </div>
+        ) : (
+          <>
+            <div className="flex justify-center mb-4">
+              <div className="w-20 h-20 bg-[#f5f5f0] rounded-3xl flex items-center justify-center">
+                <CloudSun size={48} className="text-[#5A5A40]" />
+              </div>
+            </div>
+            <h3 className="text-4xl font-light tracking-tighter mb-1">{weather?.temp}°C</h3>
+            <p className="text-lg font-serif italic text-[#1a1a1a]/60 mb-6">{weather?.condition}</p>
+            
+            <div className="flex items-center justify-center gap-2 text-xs font-medium text-[#5A5A40]">
+              <MapPin size={14} />
+              <span>{weather?.location}, Sénégal</span>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
