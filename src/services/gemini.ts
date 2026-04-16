@@ -69,6 +69,27 @@ export const analyzePlantImage = async (base64Image: string, weather?: WeatherDa
   }
 };
 
+export const generateIntelligentInsight = async (
+  crop: string, 
+  stage: string, 
+  weather: WeatherData, 
+  language: string
+): Promise<string> => {
+  const prompt = `En tant qu'expert agricole sénégalais, analyse l'intersection de ces données pour donner un conseil stratégique :
+  - Culture : ${crop}
+  - Étape actuelle : ${stage}
+  - Météo à ${weather.location} : ${weather.temp}°C, ${weather.humidity}% humidité, ${weather.rainfall}mm pluie.
+  
+  Génère une alerte ou un conseil court (2 phrases) en ${language} qui croise ces informations (ex: si pluie prévue et étape semis, conseiller de préparer les semences).`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: [{ text: prompt }],
+  });
+
+  return response.text || "";
+};
+
 export const transcribeAudio = async (base64Audio: string, language: string): Promise<string> => {
   const prompt = `Transcris cet audio en texte. La langue parlée est le ${language}. 
   Si l'audio contient une question agricole, transcris-la fidèlement. 
