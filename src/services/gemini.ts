@@ -1,23 +1,19 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { DiagnosticResult, WeatherData } from "../types";
 
-// Safely access environment variables in the browser
+// Optimized access to Gemini API key with fallback to Vite env for independent apps
 const getApiKey = () => {
-  try {
-    return (process.env.GEMINI_API_KEY) || '';
-  } catch (e) {
-    return '';
-  }
+  // Try platform environment first, then Vite public env (for standalone)
+  return process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || '';
 };
 
-// Standard initialization for Vite environment
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
 const MODEL_TEXT = "gemini-3-flash-preview";
 
-// Helper to check key without exposing it
+// Helper to check key availability
 const hasApiKey = () => {
-  const key = process.env.GEMINI_API_KEY;
-  return !!(key && key !== 'undefined' && key !== 'null' && key.length > 5);
+  const key = getApiKey();
+  return !!(key && key.length > 5);
 };
 
 console.log("[TooluBaay] AI Status:", hasApiKey() ? "Key Linked" : "Key Missing");
