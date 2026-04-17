@@ -4,7 +4,10 @@ import { DiagnosticResult, WeatherData } from "../types";
 // Optimized access to Gemini API key with fallback to Vite env for independent apps
 const getApiKey = () => {
   // Try platform environment first, then Vite public env (for standalone)
-  return process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || '';
+  // Last resort is the hardcoded key for total independence
+  return process.env.GEMINI_API_KEY || 
+         import.meta.env.VITE_GEMINI_API_KEY || 
+         "AIzaSyC8KCjhpddNq37KqIzl-B7FInOuBIDIzwE";
 };
 
 const ai = new GoogleGenAI({ apiKey: getApiKey() });
