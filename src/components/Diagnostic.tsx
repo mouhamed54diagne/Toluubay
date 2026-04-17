@@ -43,7 +43,7 @@ export default function Diagnostic() {
       setResult(diagnostic);
     } catch (err: any) {
       console.error(err);
-      setError("Désolé, une erreur est survenue lors de l'appel à l'API IA. Veuillez réessayer.");
+      setError(`Erreur API: ${err.message || "Une erreur inconnue est survenue."}`);
     } finally {
       setIsAnalyzing(false);
     }

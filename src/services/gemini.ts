@@ -14,7 +14,7 @@ export const chatWithAI = async (message: string, language: string, history: { r
   Utilise un ton bienveillant et encourageant.`;
 
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-flash-latest",
     contents: [
       ...history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
       { role: 'user', parts: [{ text: message }] }
@@ -55,7 +55,7 @@ export const analyzePlantImage = async (dataUrlSource: string, weather?: Weather
   }`;
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-image",
+    model: "gemini-flash-latest",
     contents: {
       parts: [
         { inlineData: { data: base64Image, mimeType } },
@@ -94,7 +94,7 @@ export const generateIntelligentInsight = async (
   Génère une alerte ou un conseil court (2 phrases) en ${language} qui croise ces informations (ex: si pluie prévue et étape semis, conseiller de préparer les semences).`;
 
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-flash-latest",
     contents: [{ text: prompt }],
   });
 
@@ -102,12 +102,16 @@ export const generateIntelligentInsight = async (
 };
 
 export const transcribeAudio = async (base64Audio: string, language: string): Promise<string> => {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("La clé API Gemini n'est pas configurée.");
+  }
+
   const prompt = `Transcris cet audio en texte. La langue parlée est le ${language}. 
   Si l'audio contient une question agricole, transcris-la fidèlement. 
   Réponds uniquement avec la transcription.`;
 
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-flash-latest",
     contents: {
       parts: [
         { inlineData: { data: base64Audio, mimeType: "audio/webm" } },
