@@ -76,8 +76,16 @@ export default function App() {
       // Immediate state update for zero-latency feel
       setUser(result.user);
       setLoading(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed", error);
+      
+      if (error.code === 'auth/popup-blocked') {
+        alert("Action requise : Votre navigateur a bloqué la fenêtre de connexion. Si vous utilisez l'application depuis votre écran d'accueil, connectez-vous d'abord sur la page web dans Safari, puis revenez ici. Sinon, autorisez les popups dans vos réglages Safari.");
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        // Simple cancellation, no alert needed
+      } else {
+        alert("Erreur de connexion : " + (error.message || "Une erreur inconnue est survenue."));
+      }
       setIsLoggingIn(false);
     }
   };
