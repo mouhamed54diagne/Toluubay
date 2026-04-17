@@ -1,5 +1,5 @@
 // Basic Service Worker for PWA installation
-// Version: 1.1.0 (Standalone Mode Update)
+// Version: 1.1.2 (Absolute Standalone Update)
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
