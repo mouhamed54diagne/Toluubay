@@ -143,11 +143,25 @@ export default function Chatbot() {
     }
   };
 
-  const playAudio = async (text: string) => {
-    const audioUrl = await textToSpeech(text, language);
-    if (audioUrl) {
-      const audio = new Audio(audioUrl);
-      audio.play();
+  const [isAudioLoading, setIsAudioLoading] = useState<number | null>(null);
+
+  const playAudio = async (text: string, index: number) => {
+    if (isAudioLoading !== null) return;
+    
+    setIsAudioLoading(index);
+    try {
+      const audioUrl = await textToSpeech(text, language);
+      if (audioUrl) {
+        const audio = new Audio(audioUrl);
+        audio.onended = () => setIsAudioLoading(null);
+        audio.onerror = () => setIsAudioLoading(null);
+        await audio.play();
+      } else {
+        setIsAudioLoading(null);
+      }
+    } catch (error) {
+      console.error("Audio playback error:", error);
+      setIsAudioLoading(null);
     }
   };
 
@@ -191,10 +205,22 @@ export default function Chatbot() {
                   {msg.role === 'model' && (
                     <div className="flex flex-col gap-2 mt-2">
                       <button 
-                        onClick={() => playAudio(msg.content)}
-                        className="w-fit text-[#5A5A40] hover:opacity-70 transition-opacity"
+                        onClick={() => playAudio(msg.content, i)}
+                        disabled={isAudioLoading !== null}
+                        className={`w-fit transition-all ${
+                          isAudioLoading === i 
+                          ? 'text-[#5A5A40] animate-pulse' 
+                          : 'text-[#5A5A40]/40 hover:text-[#5A5A40]'
+                        }`}
                       >
-                        <Volume2 size={16} />
+                        {isAudioLoading === i ? (
+                          <div className="flex items-center gap-2">
+                            <Loader2 size={16} className="animate-spin" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest">Génération...</span>
+                          </div>
+                        ) : (
+                          <Volume2 size={16} />
+                        )}
                       </button>
                       <FeedbackModule context={`chat_msg_${i}`} />
                     </div>
