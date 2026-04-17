@@ -1,0 +1,17 @@
+{
+  "name": "TooluBaay",
+  "short_name": "TooluBaay",
+  "description": "Conseiller agricole expert au Sénégal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f0",
+  "theme_color": "#5A5A40",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2329/2329432.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
