@@ -167,7 +167,11 @@ export const generateIntelligentInsight = async (
 export const transcribeAudio = async (base64Audio: string, language: string): Promise<string> => {
   if (!getApiKey()) return "";
 
-  const prompt = `Transcris cet audio en texte. Langue: ${language}.`;
+  const prompt = `Transcris fidèlement l'audio ci-joint. 
+  IMPORTANT: Réponds UNIQUEMENT par le texte transcrit. 
+  Ne dis PAS "Voici la transcription", ne fais AUCUN commentaire.
+  Si tu n'entends rien, ne réponds rien.
+  Langue: ${language}.`;
 
   const response = await ai.models.generateContent({
     model: MODEL_TEXT,
@@ -179,7 +183,15 @@ export const transcribeAudio = async (base64Audio: string, language: string): Pr
     }
   });
 
-  return response.text || "";
+  let text = response.text || "";
+  
+  // Nettoyage de sécurité au cas où le modèle reste bavard
+  text = text.replace(/Voici la transcription[:\s]*/i, '')
+             .replace(/La transcription est[:\s]*/i, '')
+             .replace(/^"|"$/g, '') // Enlever les guillemets éventuels
+             .trim();
+             
+  return text;
 };
 
 export const textToSpeech = async (text: string, language: string) => {
