@@ -1,17 +1,44 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { DiagnosticResult, WeatherData } from "../types";
 
-// Optimized access to Gemini API key with fallback to Vite env for independent apps
+// Optimized access to Gemini API key with absolute fallback
 const getApiKey = () => {
-  // Try platform environment first, then Vite public env (for standalone)
-  // Last resort is the hardcoded key for total independence
-  return process.env.GEMINI_API_KEY || 
-         import.meta.env.VITE_GEMINI_API_KEY || 
-         "AIzaSyC8KCjhpddNq37KqIzl-B7FInOuBIDIzwE";
+  const platformKey = process.env.GEMINI_API_KEY;
+  const viteKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const hardcodedKey = "AIzaSyC8KCjhpddNq37KqIzl-B7FInOuBIDIzwE";
+
+  // Predicate for a valid-looking Gemini key (AIza... and long enough)
+  const isValid = (k?: string) => {
+    return typeof k === 'string' && k.startsWith('AIza') && k.length > 30;
+  };
+
+  if (isValid(platformKey)) return platformKey!;
+  if (isValid(viteKey)) return viteKey!;
+  
+  // Guarantee a valid key format even if user hasn't configured platform secrets
+  return hardcodedKey;
 };
 
-const ai = new GoogleGenAI({ apiKey: getApiKey() });
+const keyToUse = getApiKey();
+// Safe logging for debugging key presence
+if (keyToUse && keyToUse.length > 8) {
+  console.log(`[TooluBaay] AI Engine initialized with key: ${keyToUse.substring(0, 4)}...${keyToUse.substring(keyToUse.length - 4)}`);
+} else {
+  console.warn("[TooluBaay] AI Engine: Missing or invalid API key.");
+}
+
+let ai: GoogleGenAI;
+try {
+  ai = new GoogleGenAI({ apiKey: keyToUse || 'INVALID_KEY' });
+} catch (e) {
+  console.error("[TooluBaay] Failed to initialize Gemini SDK:", e);
+  // Create a dummy instance to avoid crashes on export usage
+  ai = new GoogleGenAI({ apiKey: 'DUMMY_KEY' });
+}
+
 const MODEL_TEXT = "gemini-3-flash-preview";
+const MODEL_TTS = "gemini-3.1-flash-tts-preview";
+const MODEL_VISION = "gemini-3.1-flash-image-preview";
 
 // Helper to check key availability
 const hasApiKey = () => {
