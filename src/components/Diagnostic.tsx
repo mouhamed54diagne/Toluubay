@@ -31,16 +31,19 @@ export default function Diagnostic() {
     }
   };
 
+  const [error, setError] = useState<string | null>(null);
+
   const handleAnalyze = async () => {
     if (!image) return;
     setIsAnalyzing(true);
+    setError(null);
     try {
       const weather = await getWeatherData(location);
-      const base64 = image.split(',')[1];
-      const diagnostic = await analyzePlantImage(base64, weather);
+      const diagnostic = await analyzePlantImage(image, weather);
       setResult(diagnostic);
-    } catch (error) {
-      console.error(error);
+    } catch (err: any) {
+      console.error(err);
+      setError("Désolé, une erreur est survenue lors de l'appel à l'API IA. Veuillez réessayer.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -167,12 +170,20 @@ export default function Diagnostic() {
           </div>
 
           {!result && !isAnalyzing && (
-            <button 
-              onClick={handleAnalyze}
-              className="w-full bg-[#5A5A40] text-white py-4 rounded-3xl font-bold shadow-lg hover:opacity-90 transition-opacity"
-            >
-              Lancer le diagnostic IA
-            </button>
+            <div className="space-y-4">
+              {error && (
+                <div className="bg-red-50 border border-red-200 p-4 rounded-2xl flex gap-3 text-red-700 text-xs">
+                  <AlertCircle size={18} className="flex-shrink-0" />
+                  <p>{error}</p>
+                </div>
+              )}
+              <button 
+                onClick={handleAnalyze}
+                className="w-full bg-[#5A5A40] text-white py-4 rounded-3xl font-bold shadow-lg hover:opacity-90 transition-opacity"
+              >
+                Lancer le diagnostic IA
+              </button>
+            </div>
           )}
 
           <AnimatePresence>

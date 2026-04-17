@@ -1,9 +1,12 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { DiagnosticResult, WeatherData } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export const chatWithAI = async (message: string, language: string, history: { role: 'user' | 'model', content: string }[]) => {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("La clé API Gemini n'est pas configurée.");
+  }
   const systemInstruction = `Tu es TooluBaay, un conseiller agricole expert au Sénégal. 
   Tu parles en ${language}. 
   Réponds de manière concise et pratique pour des agriculteurs. 
@@ -24,7 +27,15 @@ export const chatWithAI = async (message: string, language: string, history: { r
   return response.text;
 };
 
-export const analyzePlantImage = async (base64Image: string, weather?: WeatherData): Promise<DiagnosticResult> => {
+export const analyzePlantImage = async (dataUrlSource: string, weather?: WeatherData): Promise<DiagnosticResult> => {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("La clé API Gemini n'est pas configurée.");
+  }
+
+  // Extract mime type and base64 from data URL
+  const mimeType = dataUrlSource.includes(';') ? dataUrlSource.split(';')[0].split(':')[1] : 'image/jpeg';
+  const base64Image = dataUrlSource.includes(',') ? dataUrlSource.split(',')[1] : dataUrlSource;
+
   let weatherContext = "";
   if (weather) {
     weatherContext = `Note sur la météo actuelle à ${weather.location}: température ${weather.temp}°C, humidité ${weather.humidity}%, pluviométrie ${weather.rainfall}mm.`;
@@ -47,7 +58,7 @@ export const analyzePlantImage = async (base64Image: string, weather?: WeatherDa
     model: "gemini-2.5-flash-image",
     contents: {
       parts: [
-        { inlineData: { data: base64Image, mimeType: "image/jpeg" } },
+        { inlineData: { data: base64Image, mimeType } },
         { text: prompt }
       ]
     },
