@@ -103,28 +103,54 @@ export default function Diagnostic() {
 
       {!image ? (
         <div className="space-y-4">
-          <div 
-            onClick={() => fileInputRef.current?.click()}
-            className="aspect-square bg-white border-2 border-dashed border-[#1a1a1a]/10 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:border-[#5A5A40]/50 transition-colors"
-          >
-            <div className="w-16 h-16 bg-[#f5f5f0] rounded-full flex items-center justify-center mb-4">
-              <Camera size={32} className="text-[#5A5A40]" />
+          <div className="grid grid-cols-2 gap-4">
+            <div 
+              onClick={() => {
+                const input = fileInputRef.current;
+                if (input) {
+                  input.setAttribute('capture', 'environment');
+                  input.click();
+                }
+              }}
+              className="aspect-square bg-white border-2 border-dashed border-[#1a1a1a]/10 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:border-[#5A5A40]/50 transition-colors"
+            >
+              <div className="w-12 h-12 bg-[#f5f5f0] rounded-full flex items-center justify-center mb-3">
+                <Camera size={24} className="text-[#5A5A40]" />
+              </div>
+              <p className="text-sm font-medium">Caméra</p>
+              <p className="text-[10px] text-[#1a1a1a]/50">Prendre photo</p>
             </div>
-            <p className="font-medium">Prendre une photo</p>
-            <p className="text-xs text-[#1a1a1a]/50 mt-1">ou cliquez pour importer</p>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleImageUpload} 
-              accept="image/*" 
-              className="hidden" 
-              capture="environment"
-            />
+
+            <div 
+              onClick={() => {
+                const input = fileInputRef.current;
+                if (input) {
+                  input.removeAttribute('capture');
+                  input.click();
+                }
+              }}
+              className="aspect-square bg-white border-2 border-dashed border-[#1a1a1a]/10 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:border-[#5A5A40]/50 transition-colors"
+            >
+              <div className="w-12 h-12 bg-[#f5f5f0] rounded-full flex items-center justify-center mb-3">
+                <Upload size={24} className="text-[#5A5A40]" />
+              </div>
+              <p className="text-sm font-medium">Galerie</p>
+              <p className="text-[10px] text-[#1a1a1a]/50">Importer image</p>
+            </div>
           </div>
+
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleImageUpload} 
+            accept="image/*" 
+            className="hidden" 
+          />
+          
           <div className="bg-[#5A5A40]/5 p-4 rounded-2xl flex gap-3">
             <AlertCircle size={20} className="text-[#5A5A40] flex-shrink-0" />
             <p className="text-xs text-[#5A5A40]">
-              Conseil: Prenez une photo nette des feuilles ou des tiges affectées pour un meilleur diagnostic.
+              Conseil: Si vous recevez une photo de plante d'une autre source, utilisez l'option "Galerie" pour l'analyser.
             </p>
           </div>
         </div>
