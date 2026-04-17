@@ -197,16 +197,20 @@ export const transcribeAudio = async (base64Audio: string, language: string): Pr
 export const textToSpeech = async (text: string, language: string) => {
   if (!getApiKey()) return null;
 
+  // Map codes to full language names for better model understanding
+  const langName = language === 'wo' ? 'Wolof' : (language === 'fr' ? 'Français' : language);
+
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3.1-flash-tts-preview",
-      contents: [{ parts: [{ text: `Lis ce texte en ${language}: ${text}` }] }],
+      // Direct instruction to minimize generation latency
+      contents: [{ parts: [{ text: `Narrate in ${langName}: ${text}` }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            // 'Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'
-            prebuiltVoiceConfig: { voiceName: 'Kore' },
+            // 'Puck' is a balanced voice, sometimes faster to stabilize
+            prebuiltVoiceConfig: { voiceName: 'Puck' },
           },
         },
       },
