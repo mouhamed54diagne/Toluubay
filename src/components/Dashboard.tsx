@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CloudSun, AlertTriangle, ArrowRight, Sparkles, Loader2, Info } from 'lucide-react';
+import { CloudSun, AlertTriangle, ArrowRight, Lightbulb, Loader2, Info } from 'lucide-react';
 import { getWeatherData } from '../services/weather';
 import { generateIntelligentInsight } from '../services/gemini';
 import { WeatherData } from '../types';
@@ -58,8 +58,8 @@ export default function Dashboard({ onNavigate }: { onNavigate: (tab: string) =>
         <div className="relative z-10 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Sparkles size={16} className="text-[#5A5A40]" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]">Analyse Inteligente (IA)</span>
+              <Lightbulb size={16} className="text-[#5A5A40]" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A40]">Conseils du Jour</span>
             </div>
             {isLoadingInsight && <Loader2 size={14} className="animate-spin text-[#5A5A40]" />}
           </div>

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Camera, Upload, RefreshCw, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Camera, Upload, RefreshCw, CheckCircle2, AlertCircle, Loader2, Sprout } from 'lucide-react';
+import { User as FirebaseUser } from 'firebase/auth';
 import { analyzePlantImage } from '../services/gemini';
 import { getWeatherData } from '../services/weather';
 import { DiagnosticResult, WeatherData } from '../types';
@@ -9,7 +10,7 @@ import FeedbackModule from './FeedbackModule';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
-export default function Diagnostic() {
+export default function Diagnostic({ user }: { user: FirebaseUser | null }) {
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<DiagnosticResult | null>(null);
@@ -50,9 +51,7 @@ export default function Diagnostic() {
   };
 
   const handleSaveToLog = async () => {
-    if (!result || !image) return;
-    const user = auth.currentUser;
-    if (!user) return;
+    if (!result || !image || !user) return;
 
     setIsSaving(true);
     const path = `users/${user.uid}/fields`;
@@ -105,7 +104,17 @@ export default function Diagnostic() {
       </div>
 
       {!image ? (
-        <div className="space-y-4">
+        <div className="space-y-6">
+          <div className="bg-white border border-[#1a1a1a]/5 rounded-[40px] p-10 text-center shadow-sm">
+            <div className="w-20 h-20 bg-[#f5f5f0] rounded-[32px] flex items-center justify-center mx-auto mb-6 text-[#5A5A40]">
+              <Camera size={36} />
+            </div>
+            <h3 className="text-xl font-serif italic text-[#5A5A40] mb-2">Analyseur de Culture</h3>
+            <p className="text-sm text-[#1a1a1a]/50 max-w-[240px] mx-auto leading-relaxed">
+              Identifiez instantanément les maladies et recevez des conseils de traitement personnalisés.
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div 
               onClick={() => {
@@ -162,9 +171,16 @@ export default function Diagnostic() {
           <div className="relative aspect-square rounded-3xl overflow-hidden shadow-lg">
             <img src={image} alt="Plante à diagnostiquer" className="w-full h-full object-cover" />
             {isAnalyzing && (
-              <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center text-white">
-                <Loader2 size={48} className="animate-spin mb-4" />
-                <p className="font-medium">Analyse en cours...</p>
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center text-white p-6 text-center">
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1], rotate: [0, 10, -10, 0] }}
+                  transition={{ repeat: Infinity, duration: 2 }}
+                  className="mb-4"
+                >
+                  <Sprout size={56} className="text-white" />
+                </motion.div>
+                <p className="font-serif italic text-lg">Analyse en cours...</p>
+                <p className="text-[10px] uppercase tracking-widest opacity-60 mt-1">TooluBaay examine votre culture</p>
               </div>
             )}
           </div>

@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Weather from './components/Weather';
@@ -14,72 +15,105 @@ import FieldLog from './components/FieldLog';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { LogIn } from 'lucide-react';
+import { LogIn, Sprout, Loader2 } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    // Fallback loading safety
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 6000);
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      // Don't clear timeout here yet, keep it for overall app load
       if (user) {
-        // Ensure user exists in Firestore
-        const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
-        
-        if (!userSnap.exists()) {
-          await setDoc(userRef, {
-            uid: user.uid,
-            name: user.displayName || 'Anonyme',
-            email: user.email,
-            createdAt: serverTimestamp(),
-            locations: ['Tambacounda']
-          });
-        }
         setUser(user);
+        setLoading(false);
+        clearTimeout(timeout);
+        
+        // Background check and registration
+        const checkUser = async () => {
+          try {
+            const userRef = doc(db, 'users', user.uid);
+            const userSnap = await getDoc(userRef);
+            if (!userSnap.exists()) {
+              await setDoc(userRef, {
+                uid: user.uid,
+                name: user.displayName || 'Anonyme',
+                email: user.email,
+                createdAt: serverTimestamp(),
+                locations: ['Tambacounda']
+              });
+            }
+          } catch (e) {
+            console.error("User registration check failed", e);
+          }
+        };
+        checkUser();
       } else {
         setUser(null);
+        setLoading(false);
+        clearTimeout(timeout);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   const handleLogin = async () => {
+    setIsLoggingIn(true);
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      // Immediate state update for zero-latency feel
+      setUser(result.user);
+      setLoading(false);
     } catch (error) {
       console.error("Login failed", error);
+      setIsLoggingIn(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f5f5f0] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5A5A40]"></div>
+      <div className="min-h-screen bg-[#f5f5f0] flex flex-col items-center justify-center">
+        <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center mb-4 animate-bounce">
+          <Sprout size={32} className="text-[#5A5A40]" />
+        </div>
+        <p className="text-sm font-serif italic text-[#5A5A40]">TooluBaay...</p>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#f5f5f0] flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-20 h-20 bg-white rounded-3xl shadow-lg flex items-center justify-center mb-8 border border-[#1a1a1a]/5">
-          <h1 className="text-4xl font-serif italic text-[#5A5A40]">T</h1>
+      <div className="min-h-screen bg-[#f5f5f0] flex flex-col items-center justify-center p-6 text-center text-[#1a1a1a]">
+        <div className="w-24 h-24 bg-white rounded-[32px] shadow-2xl flex items-center justify-center mb-8 border border-[#1a1a1a]/5">
+          <Sprout size={48} className="text-[#5A5A40]" />
         </div>
-        <h1 className="text-3xl font-serif italic text-[#5A5A40] mb-2">TooluBaay</h1>
-        <p className="text-sm text-[#1a1a1a]/60 mb-12 max-w-xs">
-          Connectez-vous pour accéder à vos conseils personnalisés et votre carnet de champ.
+        <h1 className="text-4xl font-serif italic text-[#5A5A40] mb-3 tracking-tight">TooluBaay</h1>
+        <p className="text-sm text-[#1a1a1a]/50 mb-12 max-w-[280px] leading-relaxed">
+          Votre conseiller agricole digital pour une productivité optimisée au Sénégal.
         </p>
         <button
           onClick={handleLogin}
-          className="w-full max-w-xs bg-[#5A5A40] text-white py-4 rounded-3xl font-bold shadow-lg flex items-center justify-center gap-3 hover:opacity-90 transition-opacity"
+          disabled={isLoggingIn}
+          className="w-full max-w-xs bg-[#5A5A40] text-white py-5 rounded-[24px] font-bold shadow-lg flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-70"
         >
-          <LogIn size={20} />
-          Se connecter avec Google
+          {isLoggingIn ? (
+            <Loader2 size={20} className="animate-spin" />
+          ) : (
+            <LogIn size={20} />
+          )}
+          <span>{isLoggingIn ? 'Connexion...' : 'Accéder au Tableau de Bord'}</span>
         </button>
       </div>
     );
@@ -94,9 +128,9 @@ export default function App() {
       case 'calendar':
         return <Calendar />;
       case 'chat':
-        return <Chatbot />;
+        return <Chatbot user={user} />;
       case 'diagnostic':
-        return <Diagnostic />;
+        return <Diagnostic user={user} />;
       case 'log':
         return <FieldLog />;
       default:

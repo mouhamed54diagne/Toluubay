@@ -1,7 +1,17 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { DiagnosticResult, WeatherData } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Safely access environment variables in the browser
+const getApiKey = () => {
+  try {
+    return (process.env.GEMINI_API_KEY) || '';
+  } catch (e) {
+    return '';
+  }
+};
+
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
+const MODEL_TEXT = "gemini-3-flash-preview";
 
 /**
  * Adds a WAV header to raw PCM data.
@@ -60,17 +70,15 @@ function addWavHeader(base64Pcm: string, sampleRate = 24000): string {
 }
 
 export const chatWithAI = async (message: string, language: string, history: { role: 'user' | 'model', content: string }[]) => {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("La clé API Gemini n'est pas configurée.");
+  if (!getApiKey()) {
+    throw new Error("Clé API Gemini non configurée.");
   }
   const systemInstruction = `Tu es TooluBaay, un conseiller agricole expert au Sénégal. 
   Tu parles en ${language}. 
-  Réponds de manière concise et pratique pour des agriculteurs. 
-  Si on te pose des questions sur les cultures (arachide, mil, maïs, riz) ou la météo à Tambacounda/Kaffrine, sois très précis.
-  Utilise un ton bienveillant et encourageant.`;
+  Réponds de manière concise et pratique.`;
 
   const response = await ai.models.generateContent({
-    model: "gemini-flash-latest",
+    model: MODEL_TEXT,
     contents: [
       ...history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
       { role: 'user', parts: [{ text: message }] }
@@ -80,38 +88,35 @@ export const chatWithAI = async (message: string, language: string, history: { r
     },
   });
 
-  return response.text;
+  return response.text || "Désolé, je n'ai pas pu générer de réponse.";
 };
 
 export const analyzePlantImage = async (dataUrlSource: string, weather?: WeatherData): Promise<DiagnosticResult> => {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("La clé API Gemini n'est pas configurée.");
+  if (!getApiKey()) {
+    throw new Error("Clé API Gemini non configurée.");
   }
 
-  // Extract mime type and base64 from data URL
   const mimeType = dataUrlSource.includes(';') ? dataUrlSource.split(';')[0].split(':')[1] : 'image/jpeg';
   const base64Image = dataUrlSource.includes(',') ? dataUrlSource.split(',')[1] : dataUrlSource;
 
   let weatherContext = "";
   if (weather) {
-    weatherContext = `Note sur la météo actuelle à ${weather.location}: température ${weather.temp}°C, humidité ${weather.humidity}%, pluviométrie ${weather.rainfall}mm.`;
+    weatherContext = `Météo actuelle: ${weather.temp}°C, ${weather.condition}.`;
   }
 
-  const prompt = `Analyse cette photo de plante. 
-  Identifie la maladie, le parasite ou le stress (hydrique/nutritionnel).
-  ${weatherContext}
-  Prends en compte les conditions météo pour affiner ton diagnostic.
+  const prompt = `Analyse cette photo de plante pour TooluBaay. ${weatherContext}
+  Identifie la maladie ou le stress.
   Réponds au format JSON suivant:
   {
-    "disease": "Nom de la maladie ou du problème",
+    "disease": "Nom du problème",
     "confidence": 0.95,
-    "description": "Description courte et contextualisée du problème",
-    "treatment": "Traitement recommandé (bio ou chimique)",
-    "prevention": "Conseils pour éviter que cela ne se reproduise"
+    "description": "Description courte",
+    "treatment": "Traitement recommandé",
+    "prevention": "Conseils de prévention"
   }`;
 
   const response = await ai.models.generateContent({
-    model: "gemini-flash-latest",
+    model: MODEL_TEXT,
     contents: {
       parts: [
         { inlineData: { data: base64Image, mimeType } },
@@ -126,11 +131,12 @@ export const analyzePlantImage = async (dataUrlSource: string, weather?: Weather
   try {
     return JSON.parse(response.text || "{}");
   } catch (e) {
+    console.error("Erreur parsing JSON Gemini", e);
     return {
-      disease: "Inconnu",
+      disease: "Analyse impossible",
       confidence: 0,
-      description: "Impossible d'analyser l'image.",
-      treatment: "Consultez un agent local.",
+      description: "L'image n'a pas pu être traitée correctement.",
+      treatment: "Veuillez reprendre une photo plus claire.",
       prevention: "N/A"
     };
   }
@@ -142,32 +148,29 @@ export const generateIntelligentInsight = async (
   weather: WeatherData, 
   language: string
 ): Promise<string> => {
-  const prompt = `En tant qu'expert agricole sénégalais, analyse l'intersection de ces données pour donner un conseil stratégique :
-  - Culture : ${crop}
-  - Étape actuelle : ${stage}
-  - Météo à ${weather.location} : ${weather.temp}°C, ${weather.humidity}% humidité, ${weather.rainfall}mm pluie.
-  
-  Génère une alerte ou un conseil court (2 phrases) en ${language} qui croise ces informations (ex: si pluie prévue et étape semis, conseiller de préparer les semences).`;
+  if (!getApiKey()) return "Veuillez configurer votre clé API.";
 
-  const response = await ai.models.generateContent({
-    model: "gemini-flash-latest",
-    contents: [{ text: prompt }],
-  });
+  const prompt = `En tant que TooluBaay, donne un conseil stratégique court (2 phrases) en ${language} pour la culture ${crop} (${stage}) avec météo: ${weather.temp}°C, ${weather.condition}.`;
 
-  return response.text || "";
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_TEXT,
+      contents: [{ text: prompt }],
+    });
+    return response.text || "Préparez vos prochaines étapes culturelles.";
+  } catch (e) {
+    console.error("Erreur Insight", e);
+    return "Optimisation météo momentanément indisponible.";
+  }
 };
 
 export const transcribeAudio = async (base64Audio: string, language: string): Promise<string> => {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("La clé API Gemini n'est pas configurée.");
-  }
+  if (!getApiKey()) return "";
 
-  const prompt = `Transcris cet audio en texte. La langue parlée est le ${language}. 
-  Si l'audio contient une question agricole, transcris-la fidèlement. 
-  Réponds uniquement avec la transcription.`;
+  const prompt = `Transcris cet audio en texte. Langue: ${language}.`;
 
   const response = await ai.models.generateContent({
-    model: "gemini-flash-latest",
+    model: MODEL_TEXT,
     contents: {
       parts: [
         { inlineData: { data: base64Audio, mimeType: "audio/webm" } },
@@ -180,24 +183,29 @@ export const transcribeAudio = async (base64Audio: string, language: string): Pr
 };
 
 export const textToSpeech = async (text: string, language: string) => {
-  // Note: Gemini TTS might not support all local languages perfectly, 
-  // but we'll try with a general prompt.
-  const response = await ai.models.generateContent({
-    model: "gemini-3.1-flash-tts-preview",
-    contents: [{ parts: [{ text: `Lis ce texte en ${language}: ${text}` }] }],
-    config: {
-      responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: 'Kore' },
+  if (!getApiKey()) return null;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-tts-preview",
+      contents: [{ parts: [{ text: `Lis ce texte en ${language}: ${text}` }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            // 'Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'
+            prebuiltVoiceConfig: { voiceName: 'Kore' },
+          },
         },
       },
-    },
-  });
+    });
 
-  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  if (base64Audio) {
-    return addWavHeader(base64Audio);
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (base64Audio) {
+      return addWavHeader(base64Audio);
+    }
+  } catch (e) {
+    console.error("TTS Error", e);
   }
   return null;
 };

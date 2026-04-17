@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Mic, Volume2, User, Bot, Loader2, StopCircle } from 'lucide-react';
+import { Send, Mic, Volume2, User, UserCheck, Loader2, StopCircle } from 'lucide-react';
+import { User as FirebaseUser } from 'firebase/auth';
 import { chatWithAI, textToSpeech, transcribeAudio } from '../services/gemini';
 import { ChatMessage } from '../types';
 import { LOCAL_LANGUAGES } from '../constants';
@@ -8,7 +9,7 @@ import FeedbackModule from './FeedbackModule';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
 
-export default function Chatbot() {
+export default function Chatbot({ user }: { user: FirebaseUser | null }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -19,7 +20,6 @@ export default function Chatbot() {
   const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
-    const user = auth.currentUser;
     if (!user) return;
 
     const path = `users/${user.uid}/chatHistory`;
@@ -196,10 +196,10 @@ export default function Chatbot() {
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                   msg.role === 'user' ? 'bg-[#5A5A40] text-white' : 'bg-white border border-[#1a1a1a]/10'
                 }`}>
-                  {msg.role === 'user' ? <User size={14} /> : <Bot size={14} />}
+                  {msg.role === 'user' ? <User size={14} /> : <UserCheck size={14} />}
                 </div>
                 <div className={`p-4 rounded-3xl text-sm shadow-sm ${
-                  msg.role === 'user' ? 'bg-[#5A5A40] text-white rounded-tr-none' : 'bg-white text-[#1a1a1a] rounded-tl-none'
+                  msg.role === 'user' ? 'bg-[#5A5A40] text-white rounded-tr-none' : 'bg-white text-[#1a1a1a] rounded-tl-none border border-[#1a1a1a]/5'
                 }`}>
                   <p>{msg.content}</p>
                   {msg.role === 'model' && (
@@ -232,9 +232,9 @@ export default function Chatbot() {
         </AnimatePresence>
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-white p-4 rounded-3xl shadow-sm flex items-center gap-2">
+            <div className="bg-white p-4 rounded-3xl shadow-sm border border-[#1a1a1a]/5 flex items-center gap-2">
               <Loader2 size={16} className="animate-spin text-[#5A5A40]" />
-              <span className="text-xs text-[#1a1a1a]/50">TooluBaay réfléchit...</span>
+              <span className="text-xs text-[#1a1a1a]/50">TooluBaay prépare votre réponse...</span>
             </div>
           </div>
         )}
