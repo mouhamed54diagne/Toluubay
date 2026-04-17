@@ -150,23 +150,64 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
   };
 
   const [isAudioLoading, setIsAudioLoading] = useState<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const playAudio = async (text: string, index: number) => {
-    if (isAudioLoading !== null) return;
-    
+    // If already loading or playing this one, do nothing (or stop if we want toggle)
+    if (isAudioLoading !== null) {
+      if (isAudioLoading === index && audioRef.current) {
+        audioRef.current.pause();
+        setIsAudioLoading(null);
+        return;
+      }
+    }
+
+    // Stop any existing playback
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
     setIsAudioLoading(index);
+
+    // iOS/Mobile: We must "pre-unlock" the audio context in the click handler
+    const audio = new Audio();
+    audioRef.current = audio;
+    
+    // Attempt a silent play to unlock context
+    try {
+      audio.play().catch(() => {});
+      audio.pause();
+    } catch (e) {
+      console.warn("Audio unlock attempt failed", e);
+    }
+    
     try {
       const audioUrl = await textToSpeech(text, language);
-      if (audioUrl) {
-        const audio = new Audio(audioUrl);
-        audio.onended = () => setIsAudioLoading(null);
-        audio.onerror = () => setIsAudioLoading(null);
-        await audio.play();
+      if (audioUrl && audioRef.current === audio) {
+        audio.src = audioUrl;
+        audio.onended = () => {
+          setIsAudioLoading(null);
+          URL.revokeObjectURL(audioUrl);
+        };
+        audio.onerror = (e) => {
+          console.error("Audio error event:", e);
+          setIsAudioLoading(null);
+          URL.revokeObjectURL(audioUrl);
+        };
+        
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(error => {
+            console.error("Playback failed after source set:", error);
+            setIsAudioLoading(null);
+          });
+        }
       } else {
         setIsAudioLoading(null);
       }
     } catch (error) {
-      console.error("Audio playback error:", error);
+      console.error("Audio generation error:", error);
       setIsAudioLoading(null);
     }
   };

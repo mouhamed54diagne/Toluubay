@@ -1,5 +1,5 @@
 // Basic Service Worker for PWA installation
-// Version: 1.0.1 (Update to force refresh)
+// Version: 1.0.2 (Force audio fix refresh)
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
