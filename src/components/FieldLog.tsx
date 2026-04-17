@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ClipboardList, Plus, ChevronRight, MapPin, Calendar, Loader2, X } from 'lucide-react';
 import { FieldEntry, CropType } from '../types';
-import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { User as FirebaseUser } from 'firebase/auth';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { CROPS } from '../constants';
 import { collection, onSnapshot, query, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
 
-export default function FieldLog() {
+export default function FieldLog({ user }: { user: FirebaseUser | null }) {
   const [entries, setEntries] = useState<FieldEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -20,7 +21,6 @@ export default function FieldLog() {
   });
 
   useEffect(() => {
-    const user = auth.currentUser;
     if (!user) return;
 
     const path = `users/${user.uid}/fields`;
@@ -42,7 +42,6 @@ export default function FieldLog() {
 
   const handleAddEntry = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = auth.currentUser;
     if (!user) return;
 
     const path = `users/${user.uid}/fields`;

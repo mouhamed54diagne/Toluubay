@@ -141,7 +141,7 @@ export default function App() {
       case 'diagnostic':
         return <Diagnostic user={user} />;
       case 'log':
-        return <FieldLog />;
+        return <FieldLog user={user} />;
       default:
         return <Dashboard onNavigate={setActiveTab} />;
     }
