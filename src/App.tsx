@@ -76,6 +76,7 @@ export default function App() {
       // Immediate state update for zero-latency feel
       setUser(result.user);
       setLoading(false);
+      setIsLoggingIn(false);
     } catch (error: any) {
       console.error("Login failed", error);
       

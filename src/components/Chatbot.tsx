@@ -134,10 +134,15 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
         const modelMsg: ChatMessage = { role: 'model', content: aiResponse };
         await saveMessage(modelMsg);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      const errorMsg: ChatMessage = { role: 'model', content: "Désolé, j'ai rencontré une erreur. Réessayez plus tard." };
-      await saveMessage(errorMsg);
+      const errorMsg: ChatMessage = { 
+        role: 'model', 
+        content: error.message?.includes("Clé API") 
+          ? "Erreur technique : La clé API Gemini ne semble pas être configurée correctement pour cet environnement. Veuillez vérifier les 'Secrets' dans l'éditeur AI Studio." 
+          : "Désolé, j'ai rencontré une erreur lors de la génération de la réponse. Veuillez réessayer." 
+      };
+      setMessages(prev => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
     }

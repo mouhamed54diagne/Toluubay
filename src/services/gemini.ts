@@ -71,7 +71,7 @@ function addWavHeader(base64Pcm: string, sampleRate = 24000): string {
 
 export const chatWithAI = async (message: string, language: string, history: { role: 'user' | 'model', content: string }[]) => {
   if (!getApiKey()) {
-    throw new Error("Clé API Gemini non configurée.");
+    throw new Error("Clé API Gemini non trouvée. Veuillez configurer les secrets dans l'éditeur.");
   }
   const systemInstruction = `Tu es TooluBaay, un conseiller agricole expert au Sénégal. 
   Tu parles en ${language}. 
