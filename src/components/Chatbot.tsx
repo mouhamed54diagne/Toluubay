@@ -136,11 +136,12 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
       }
     } catch (error: any) {
       console.error(error);
+      const technicalDetails = error.message || String(error);
       const errorMsg: ChatMessage = { 
         role: 'model', 
-        content: error.message?.includes("Clé API") 
-          ? "Erreur technique : La clé API Gemini ne semble pas être configurée correctement pour cet environnement. Veuillez vérifier les 'Secrets' dans l'éditeur AI Studio." 
-          : "Désolé, j'ai rencontré une erreur lors de la génération de la réponse. Veuillez réessayer." 
+        content: technicalDetails.includes("Clé API") 
+          ? "Erreur technique : La clé API Gemini ne semble pas être configurée correctement pour cet environnement. Veuillez vérifier les 'Premiers pas' ou 'Secrets' dans l'éditeur." 
+          : `Désolé, j'ai rencontré une erreur technique : "${technicalDetails}". Cela peut arriver si la connexion est instable ou si le service est momentanément saturé.` 
       };
       setMessages(prev => [...prev, errorMsg]);
     } finally {

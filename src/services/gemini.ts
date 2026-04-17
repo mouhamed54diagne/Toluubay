@@ -10,8 +10,17 @@ const getApiKey = () => {
   }
 };
 
-const ai = new GoogleGenAI({ apiKey: getApiKey() });
+// Standard initialization for Vite environment
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 const MODEL_TEXT = "gemini-3-flash-preview";
+
+// Helper to check key without exposing it
+const hasApiKey = () => {
+  const key = process.env.GEMINI_API_KEY;
+  return !!(key && key !== 'undefined' && key !== 'null' && key.length > 5);
+};
+
+console.log("[TooluBaay] AI Status:", hasApiKey() ? "Key Linked" : "Key Missing");
 
 /**
  * Adds a WAV header to raw PCM data.
@@ -70,8 +79,8 @@ function addWavHeader(base64Pcm: string, sampleRate = 24000): string {
 }
 
 export const chatWithAI = async (message: string, language: string, history: { role: 'user' | 'model', content: string }[]) => {
-  if (!getApiKey()) {
-    throw new Error("Clé API Gemini non trouvée. Veuillez configurer les secrets dans l'éditeur.");
+  if (!hasApiKey()) {
+    throw new Error("Clé API Gemini non trouvée (ou invalide).");
   }
   const systemInstruction = `Tu es TooluBaay, un conseiller agricole expert au Sénégal. 
   Tu parles en ${language}. 
@@ -92,8 +101,8 @@ export const chatWithAI = async (message: string, language: string, history: { r
 };
 
 export const analyzePlantImage = async (dataUrlSource: string, weather?: WeatherData): Promise<DiagnosticResult> => {
-  if (!getApiKey()) {
-    throw new Error("Clé API Gemini non configurée.");
+  if (!hasApiKey()) {
+    throw new Error("Clé API Gemini non trouvée.");
   }
 
   const mimeType = dataUrlSource.includes(';') ? dataUrlSource.split(';')[0].split(':')[1] : 'image/jpeg';
@@ -148,7 +157,7 @@ export const generateIntelligentInsight = async (
   weather: WeatherData, 
   language: string
 ): Promise<string> => {
-  if (!getApiKey()) return "Veuillez configurer votre clé API.";
+  if (!hasApiKey()) return "Veuillez configurer votre clé API.";
 
   const prompt = `En tant que TooluBaay, donne un conseil stratégique court (2 phrases) en ${language} pour la culture ${crop} (${stage}) avec météo: ${weather.temp}°C, ${weather.condition}.`;
 
@@ -165,7 +174,7 @@ export const generateIntelligentInsight = async (
 };
 
 export const transcribeAudio = async (base64Audio: string, language: string): Promise<string> => {
-  if (!getApiKey()) return "";
+  if (!hasApiKey()) return "";
 
   const prompt = `Transcris fidèlement l'audio ci-joint. 
   IMPORTANT: Réponds UNIQUEMENT par le texte transcrit. 
@@ -195,7 +204,7 @@ export const transcribeAudio = async (base64Audio: string, language: string): Pr
 };
 
 export const textToSpeech = async (text: string, language: string) => {
-  if (!getApiKey()) return null;
+  if (!hasApiKey()) return null;
 
   // Map codes to full language names for better model understanding
   const langName = language === 'wo' ? 'Wolof' : (language === 'fr' ? 'Français' : language);
