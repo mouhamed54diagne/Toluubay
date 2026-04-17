@@ -2,8 +2,10 @@
   "name": "TooluBaay",
   "short_name": "TooluBaay",
   "description": "Conseiller agricole expert au Sénégal",
-  "start_url": "/",
+  "start_url": "/?mode=pwa",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#f5f5f0",
   "theme_color": "#5A5A40",
   "icons": [
