@@ -26,11 +26,13 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
     const q = query(collection(db, path), orderBy('timestamp', 'asc'), limit(50));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (snapshot.metadata.hasPendingWrites) return; // Wait for server confirmation
+      
       const data = snapshot.docs.map(doc => doc.data() as ChatMessage);
-      if (data.length === 0) {
-        setMessages([{ role: 'model', content: "Salam! Je suis TooluBaay, votre conseiller agricole. Comment puis-je vous aider aujourd'hui ?" }]);
-      } else {
+      if (data.length > 0) {
         setMessages(data);
+      } else {
+        setMessages([{ role: 'model', content: "Salam! Je suis TooluBaay, votre conseiller agricole. Comment puis-je vous aider aujourd'hui ?" }]);
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, path);
@@ -120,28 +122,42 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
     const userMessageContent = input;
     setInput('');
     
-    // Save user message
-    const userMsg: ChatMessage = { role: 'user', content: userMessageContent };
-    await saveMessage(userMsg);
-
+    // Optimistic local update
+    const userMsg: ChatMessage = { 
+      role: 'user', 
+      content: userMessageContent,
+      timestamp: { seconds: Date.now() / 1000 } // Fake timestamp for instant display
+    };
+    
+    setMessages(prev => [...prev, userMsg]);
     setIsLoading(true);
 
     try {
-      const history = messages.map(m => ({ role: m.role, content: m.content }));
-      const aiResponse = await chatWithAI(userMessageContent, language, history);
+      // 1. Save user message to Firestore (background)
+      saveMessage(userMsg);
+
+      // 2. Chat with AI
+      const historyForAI = messages.map(m => ({ role: m.role, content: m.content }));
+      const aiResponse = await chatWithAI(userMessageContent, language, historyForAI);
       
       if (aiResponse) {
-        const modelMsg: ChatMessage = { role: 'model', content: aiResponse };
+        const modelMsg: ChatMessage = { 
+          role: 'model', 
+          content: aiResponse,
+          timestamp: { seconds: Date.now() / 1000 }
+        };
+        
+        // Optimistic update for AI response
+        setMessages(prev => [...prev, modelMsg]);
+        
+        // 3. Save AI response to Firestore
         await saveMessage(modelMsg);
       }
     } catch (error: any) {
-      console.error(error);
-      const technicalDetails = error.message || String(error);
+      console.error("[Chatbot] handleSend error:", error);
       const errorMsg: ChatMessage = { 
         role: 'model', 
-        content: technicalDetails.includes("Clé API") 
-          ? "Erreur technique : La clé API Gemini ne semble pas être configurée correctement pour cet environnement. Veuillez vérifier les 'Premiers pas' ou 'Secrets' dans l'éditeur." 
-          : `Désolé, j'ai rencontré une erreur technique : "${technicalDetails}". Cela peut arriver si la connexion est instable ou si le service est momentanément saturé.` 
+        content: `Désolé, j'ai rencontré un problème : ${error.message || "Erreur inconnue"}.`
       };
       setMessages(prev => [...prev, errorMsg]);
     } finally {

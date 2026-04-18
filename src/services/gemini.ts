@@ -33,9 +33,9 @@ try {
   ai = new GoogleGenAI({ apiKey: 'DUMMY_KEY' });
 }
 
-const MODEL_TEXT = "gemini-3-flash-preview";
+const MODEL_TEXT = "gemini-3.1-flash-lite-preview";
 const MODEL_TTS = "gemini-3.1-flash-tts-preview";
-const MODEL_VISION = "gemini-3.1-flash-image-preview";
+const MODEL_VISION = "gemini-3-flash-preview";
 
 // Helper to check key availability
 const hasApiKey = () => {
@@ -112,10 +112,14 @@ export const chatWithAI = async (message: string, language: string, history: { r
   Réponds de manière concise et pratique.`;
 
   try {
+    console.log(`[Gemini] Calling ${MODEL_TEXT} for language: ${language}`);
+    // Limit history to the 5 last messages to save quota/tokens
+    const recentHistory = history.slice(-5);
+    
     const response = await ai.models.generateContent({
       model: MODEL_TEXT,
       contents: [
-        ...history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
+        ...recentHistory.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
         { role: 'user', parts: [{ text: message }] }
       ],
       config: {
@@ -123,6 +127,8 @@ export const chatWithAI = async (message: string, language: string, history: { r
       },
     });
 
+    console.log("[Gemini] Response received:", response.text ? "Success" : "Empty");
+    
     if (!response.text) {
       console.warn("[TooluBaay] Model returned an empty response.");
       return "Le conseiller est momentanément silencieux. Veuillez réessayer.";
