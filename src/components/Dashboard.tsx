@@ -1,35 +1,65 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CloudSun, AlertTriangle, ArrowRight, Lightbulb, Loader2, Info } from 'lucide-react';
+import { CloudSun, AlertTriangle, ArrowRight, Lightbulb, Loader2, Info, User as UserIcon } from 'lucide-react';
 import { getWeatherData } from '../services/weather';
 import { generateIntelligentInsight } from '../services/gemini';
-import { WeatherData } from '../types';
+import { WeatherData, FieldEntry } from '../types';
 import { PILOT_ZONES, CROPS } from '../constants';
 import FeedbackModule from './FeedbackModule';
+import { User as FirebaseUser } from 'firebase/auth';
+import { db } from '../lib/firebase';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 
-export default function Dashboard({ onNavigate }: { onNavigate: (tab: string) => void }) {
+export default function Dashboard({ user, onNavigate }: { user: FirebaseUser | null, onNavigate: (tab: string) => void }) {
   const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [latestField, setLatestField] = useState<FieldEntry | null>(null);
   const [insight, setInsight] = useState<string>('');
   const [isLoadingInsight, setIsLoadingInsight] = useState(false);
 
   useEffect(() => {
     const initDashboard = async () => {
+      // 1. Fetch Weather
       const weatherData = await getWeatherData(PILOT_ZONES[0]);
       setWeather(weatherData);
+
+      // 2. Fetch Latest Field Entry for Data Intersection
+      let currentCrop = 'Arachide';
+      let currentStage = 'Semis';
+
+      if (user) {
+        try {
+          const q = query(
+            collection(db, `users/${user.uid}/fields`), 
+            orderBy('date', 'desc'), 
+            limit(1)
+          );
+          const snapshot = await getDocs(q);
+          if (!snapshot.empty) {
+            const entry = snapshot.docs[0].data() as FieldEntry;
+            setLatestField(entry);
+            currentCrop = entry.crop;
+            // Assume latest recorded crop is the focus
+          }
+        } catch (e) {
+          console.error("Failed to fetch latest field", e);
+        }
+      }
       
-      // Intersection of data: Weather + Calendar (Mocking Arachide/Semis)
+      // 3. Generate Intelligent Intersection (Weather + User Field)
       setIsLoadingInsight(true);
       try {
-        const text = await generateIntelligentInsight('Arachide', 'Semis', weatherData, 'Français');
+        const text = await generateIntelligentInsight(currentCrop, currentStage, weatherData, 'Français');
         setInsight(text);
       } catch (e) {
         console.error(e);
+        // Fallback to static rule
+        setInsight(`Compte tenu des ${weatherData.temp}°C, assurez un suivi rigoureux de l'humidité du sol pour vos semis.`);
       } finally {
         setIsLoadingInsight(false);
       }
     };
     initDashboard();
-  }, []);
+  }, [user]);
 
   return (
     <div className="space-y-6">
@@ -64,21 +94,30 @@ export default function Dashboard({ onNavigate }: { onNavigate: (tab: string) =>
             {isLoadingInsight && <Loader2 size={14} className="animate-spin text-[#5A5A40]" />}
           </div>
           
-          <div className="bg-[#f5f5f0] p-4 rounded-2xl">
-            <p className="text-sm leading-relaxed text-[#1a1a1a]/80 italic">
-              {isLoadingInsight ? "Intersection des données en cours..." : insight || "Analyse indisponible."}
-            </p>
+          <div className="bg-[#f5f5f0] p-4 rounded-2xl min-h-[80px] flex items-center justify-center">
+            {isLoadingInsight ? (
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 size={24} className="animate-spin text-[#5A5A40]/20" />
+                <p className="text-[10px] text-[#1a1a1a]/30 font-bold uppercase tracking-widest">Analyse Croisée...</p>
+              </div>
+            ) : (
+              <p className="text-sm leading-relaxed text-[#1a1a1a]/80 italic w-full">
+                {insight || "Analyse indisponible."}
+              </p>
+            )}
             {insight && !isLoadingInsight && <FeedbackModule context="dashboard_insight" />}
           </div>
 
           <div className="flex items-center gap-3">
             <div className="flex-1 bg-yellow-50 p-3 rounded-xl flex items-center gap-2">
               <AlertTriangle size={14} className="text-yellow-600" />
-              <p className="text-[10px] font-bold text-yellow-700 uppercase tracking-tight">Alerte: Préparation Sol</p>
+              <p className="text-[10px] font-bold text-yellow-700 uppercase tracking-tight">
+                {latestField ? `Alerte ${latestField.crop}: Suivi` : "Alerte: Préparation Sol"}
+              </p>
             </div>
             <button 
-              onClick={() => onNavigate('calendar')}
-              className="p-3 bg-[#5A5A40] text-white rounded-xl"
+              onClick={() => onNavigate(latestField ? 'log' : 'calendar')}
+              className="p-3 bg-[#5A5A40] text-white rounded-xl shadow-md active:scale-95 transition-all"
             >
               <ArrowRight size={16} />
             </button>

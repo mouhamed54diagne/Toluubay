@@ -131,7 +131,7 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'home':
-        return <Dashboard onNavigate={setActiveTab} />;
+        return <Dashboard user={user} onNavigate={setActiveTab} />;
       case 'weather':
         return <Weather />;
       case 'calendar':
