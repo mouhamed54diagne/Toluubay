@@ -29,8 +29,8 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5f0] text-[#1a1a1a] font-sans pb-20">
-      <header className="bg-white border-b border-[#1a1a1a]/10 p-4 sticky top-0 z-50">
+    <div className="min-h-screen bg-[#f5f5f0] text-[#1a1a1a] font-sans pb-20 pt-[env(safe-area-inset-top)]">
+      <header className="bg-white border-b border-[#1a1a1a]/10 p-4 sticky top-[env(safe-area-inset-top)] z-50">
         <div className="flex items-center justify-between max-w-md mx-auto">
           <h1 className="text-2xl font-serif italic text-[#5A5A40]">TooluBaay</h1>
           <div className="flex items-center gap-3">

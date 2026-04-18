@@ -229,18 +229,24 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-180px)]">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-serif italic">Conseiller IA</h2>
-        <select 
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-          className="text-xs bg-white border border-[#1a1a1a]/10 rounded-full px-3 py-1 outline-none"
-        >
-          {LOCAL_LANGUAGES.map(lang => (
-            <option key={lang.code} value={lang.name}>{lang.name}</option>
-          ))}
-        </select>
+    <div className="flex flex-col h-[calc(100vh-180px)] pt-2">
+      <div className="flex items-center justify-between mb-4 bg-white/50 p-3 rounded-2xl border border-[#1a1a1a]/5">
+        <div>
+          <h2 className="text-xl font-serif italic text-[#5A5A40]">Conseiller IA</h2>
+          <p className="text-[10px] uppercase tracking-widest text-[#1a1a1a]/40 font-bold">Mode Vocal Expert</p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <span className="text-[8px] font-bold uppercase text-[#1a1a1a]/30">Langue</span>
+          <select 
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            className="text-xs bg-white border border-[#1a1a1a]/10 rounded-full px-4 py-1.5 outline-none shadow-sm font-medium"
+          >
+            {LOCAL_LANGUAGES.map(lang => (
+              <option key={lang.code} value={lang.name}>{lang.name}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div 
