@@ -1,15 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Mic, Volume2, User, UserCheck, Loader2, StopCircle } from 'lucide-react';
+import { Send, Mic, Volume2, User, UserCheck, Loader2, StopCircle, History, Plus, ChevronLeft, Trash2 } from 'lucide-react';
 import { User as FirebaseUser } from 'firebase/auth';
 import { chatWithAI, textToSpeech, transcribeAudio } from '../services/gemini';
 import { ChatMessage } from '../types';
 import { LOCAL_LANGUAGES } from '../constants';
 import FeedbackModule from './FeedbackModule';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, limit, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+
+interface Conversation {
+  id: string;
+  title: string;
+  lastMessage?: string;
+  updatedAt: any;
+}
 
 export default function Chatbot({ user }: { user: FirebaseUser | null }) {
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -19,27 +30,50 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
+  // 1. Load Conversations List
   useEffect(() => {
     if (!user) return;
+    const path = `users/${user.uid}/conversations`;
+    const q = query(collection(db, path), orderBy('updatedAt', 'desc'), limit(20));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const convs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Conversation));
+      setConversations(convs);
+      
+      // Auto-select latest if none selected
+      if (convs.length > 0 && !currentConversationId) {
+        setCurrentConversationId(convs[0].id);
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [user]);
 
-    const path = `users/${user.uid}/chatHistory`;
+  // 2. Load Messages for current conversation
+  useEffect(() => {
+    if (!user || !currentConversationId) {
+      setMessages([{ role: 'model', content: "Salam! Je suis TooluBaay, votre conseiller agricole. Commencez une nouvelle discussion pour m'interroger." }]);
+      return;
+    }
+
+    const path = `users/${user.uid}/conversations/${currentConversationId}/messages`;
     const q = query(collection(db, path), orderBy('timestamp', 'asc'), limit(50));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (snapshot.metadata.hasPendingWrites) return; // Wait for server confirmation
+      if (snapshot.metadata.hasPendingWrites) return; 
       
       const data = snapshot.docs.map(doc => doc.data() as ChatMessage);
       if (data.length > 0) {
         setMessages(data);
       } else {
-        setMessages([{ role: 'model', content: "Salam! Je suis TooluBaay, votre conseiller agricole. Comment puis-je vous aider aujourd'hui ?" }]);
+        setMessages([{ role: 'model', content: "Mame Boye! Posez votre question sur cette nouvelle discussion." }]);
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, path);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user, currentConversationId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -101,14 +135,63 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
     }
   };
 
+  const createNewConversation = async () => {
+    if (!user) return;
+    setIsLoading(true);
+    const path = `users/${user.uid}/conversations`;
+    try {
+      const newConv = await addDoc(collection(db, path), {
+        title: "Nouvelle Discussion",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      setCurrentConversationId(newConv.id);
+      setShowHistory(false);
+      setMessages([]);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.CREATE, path);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteConversation = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user || !confirm("Supprimer cette discussion ?")) return;
+    const path = `users/${user.uid}/conversations/${id}`;
+    try {
+      await deleteDoc(doc(db, path));
+      if (currentConversationId === id) {
+        setCurrentConversationId(null);
+      }
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, path);
+    }
+  };
+
   const saveMessage = async (msg: ChatMessage) => {
     const user = auth.currentUser;
-    if (!user) return;
-    const path = `users/${user.uid}/chatHistory`;
+    if (!user || !currentConversationId) return;
+    
+    // If it's the first message of a "Nouvelle Discussion", update the title
+    if (messages.length <= 1 && msg.role === 'user') {
+      const convPath = `users/${user.uid}/conversations/${currentConversationId}`;
+      updateDoc(doc(db, convPath), { 
+        title: msg.content.substring(0, 30) + (msg.content.length > 30 ? '...' : ''),
+        updatedAt: serverTimestamp()
+      }).catch(console.error);
+    } else {
+      // Just update updatedAt
+      const convPath = `users/${user.uid}/conversations/${currentConversationId}`;
+      updateDoc(doc(db, convPath), { 
+        updatedAt: serverTimestamp()
+      }).catch(console.error);
+    }
+
+    const path = `users/${user.uid}/conversations/${currentConversationId}/messages`;
     try {
       await addDoc(collection(db, path), {
         ...msg,
-        uid: user.uid,
         timestamp: serverTimestamp()
       });
     } catch (e) {
@@ -119,6 +202,11 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
+    // Ensure we have a conversation
+    if (!currentConversationId) {
+      await createNewConversation();
+    }
+
     const userMessageContent = input;
     setInput('');
     
@@ -126,7 +214,7 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
     const userMsg: ChatMessage = { 
       role: 'user', 
       content: userMessageContent,
-      timestamp: { seconds: Date.now() / 1000 } // Fake timestamp for instant display
+      timestamp: { seconds: Date.now() / 1000 }
     };
     
     setMessages(prev => [...prev, userMsg]);
@@ -229,11 +317,87 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-180px)] pt-2">
+    <div className="flex flex-col h-[calc(100vh-180px)] pt-2 relative overflow-hidden">
+      {/* History Sidebar/Layer */}
+      <AnimatePresence>
+        {showHistory && (
+          <motion.div 
+            initial={{ x: '-100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '-100%' }}
+            className="absolute inset-0 z-40 bg-[#f5f5f0] flex flex-col p-4"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <button 
+                onClick={() => setShowHistory(false)}
+                className="p-2 hover:bg-white rounded-full transition-colors"
+              >
+                <ChevronLeft size={24} />
+              </button>
+              <h3 className="font-serif italic text-lg">Vos Discussions</h3>
+              <div className="w-8" />
+            </div>
+
+            <button 
+              onClick={createNewConversation}
+              className="w-full flex items-center justify-center gap-2 p-4 bg-white border border-[#1a1a1a]/5 rounded-2xl mb-4 shadow-sm active:scale-95 transition-all text-[#5A5A40] font-bold text-sm"
+            >
+              <Plus size={18} />
+              Nouvelle Discussion
+            </button>
+
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {conversations.map(conv => (
+                <div 
+                  key={conv.id}
+                  onClick={() => {
+                    setCurrentConversationId(conv.id);
+                    setShowHistory(false);
+                  }}
+                  className={`group flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all ${
+                    currentConversationId === conv.id 
+                    ? 'bg-[#5A5A40] text-white shadow-md scale-[1.02]' 
+                    : 'bg-white hover:bg-white/80 text-[#1a1a1a]/80'
+                  }`}
+                >
+                  <div className="flex-1 truncate pr-2">
+                    <p className="font-medium text-sm truncate">{conv.title}</p>
+                    <p className={`text-[10px] mt-1 ${currentConversationId === conv.id ? 'text-white/60' : 'text-[#1a1a1a]/40'}`}>
+                      {conv.updatedAt?.seconds ? new Date(conv.updatedAt.seconds * 1000).toLocaleDateString() : 'Aujourd\'hui'}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={(e) => deleteConversation(conv.id, e)}
+                    className={`p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity ${
+                      currentConversationId === conv.id ? 'hover:bg-white/20' : 'hover:bg-red-50 text-red-400'
+                    }`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+              {conversations.length === 0 && (
+                <div className="text-center py-12 opacity-30 italic text-sm">
+                  Aucun historique.
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex items-center justify-between mb-4 bg-white/50 p-3 rounded-2xl border border-[#1a1a1a]/5">
-        <div>
-          <h2 className="text-xl font-serif italic text-[#5A5A40]">Conseiller IA</h2>
-          <p className="text-[10px] uppercase tracking-widest text-[#1a1a1a]/40 font-bold">Mode Vocal Expert</p>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setShowHistory(true)}
+            className="p-2 bg-[#5A5A40] text-white rounded-xl shadow-sm active:scale-90 transition-all"
+          >
+            <History size={18} />
+          </button>
+          <div>
+            <h2 className="text-lg font-serif italic text-[#5A5A40] leading-none mb-1">TooluBaay</h2>
+            <p className="text-[8px] uppercase tracking-widest text-[#1a1a1a]/40 font-bold">Conseiller IA</p>
+          </div>
         </div>
         <div className="flex flex-col items-end gap-1">
           <span className="text-[8px] font-bold uppercase text-[#1a1a1a]/30">Langue</span>

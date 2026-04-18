@@ -36,4 +36,5 @@ export interface ChatMessage {
   role: 'user' | 'model';
   content: string;
   audioUrl?: string;
+  timestamp?: any;
 }

@@ -30,17 +30,27 @@
       "required": ["uid", "date", "crop", "location"]
     },
     "ChatMessage": {
-      "title": "Conversation Chatbot",
-      "description": "Historique des échanges avec l'IA.",
+      "title": "Message de Chat",
+      "description": "Un message individuel au sein d'une conversation.",
       "type": "object",
       "properties": {
-        "uid": { "type": "string" },
         "role": { "type": "string", "enum": ["user", "model"] },
         "content": { "type": "string" },
-        "language": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" }
       },
-      "required": ["uid", "role", "content"]
+      "required": ["role", "content"]
+    },
+    "Conversation": {
+      "title": "Session de Chat",
+      "description": "Une session de discussion regroupant plusieurs messages.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "lastMessage": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "createdAt"]
     }
   },
   "firestore": {
@@ -52,9 +62,13 @@
       "schema": "FieldEntry",
       "description": "Carnet de champs de l'utilisateur."
     },
-    "/users/{userId}/chatHistory/{chatId}": {
+    "/users/{userId}/conversations/{convId}": {
+      "schema": "Conversation",
+      "description": "Liste des conversations de l'utilisateur."
+    },
+    "/users/{userId}/conversations/{convId}/messages/{msgId}": {
       "schema": "ChatMessage",
-      "description": "Historique de chat de l'utilisateur."
+      "description": "Messages d'une conversation spécifique."
     }
   }
 }

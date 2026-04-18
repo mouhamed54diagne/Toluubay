@@ -101,6 +101,23 @@ service cloud.firestore {
         allow delete: if isOwner(userId);
       }
 
+      match /conversations/{convId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && 
+                        request.resource.data.keys().hasAll(['title', 'createdAt']) &&
+                        request.resource.data.createdAt is timestamp;
+        allow update: if isOwner(userId) &&
+                        request.resource.data.updatedAt is timestamp;
+        allow delete: if isOwner(userId);
+
+        match /messages/{msgId} {
+          allow read: if isOwner(userId) || isAdmin();
+          allow create: if isOwner(userId) &&
+                        request.resource.data.keys().hasAll(['role', 'content', 'timestamp']) &&
+                        request.resource.data.timestamp is timestamp;
+        }
+      }
+
       match /chatHistory/{chatId} {
         allow read: if isOwner(userId) || isAdmin();
         allow create: if isOwner(userId) && 
