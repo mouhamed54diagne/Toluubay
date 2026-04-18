@@ -103,24 +103,46 @@ function addWavHeader(base64Pcm: string, sampleRate = 24000): string {
 
 export const chatWithAI = async (message: string, language: string, history: { role: 'user' | 'model', content: string }[]) => {
   if (!hasApiKey()) {
-    throw new Error("Clé API Gemini non trouvée (ou invalide).");
+    console.error("[TooluBaay] Attempted to chat without a valid API key.");
+    throw new Error("Clé API Gemini non trouvée ou invalide. Veuillez vérifier votre configuration.");
   }
+  
   const systemInstruction = `Tu es TooluBaay, un conseiller agricole expert au Sénégal. 
   Tu parles en ${language}. 
   Réponds de manière concise et pratique.`;
 
-  const response = await ai.models.generateContent({
-    model: MODEL_TEXT,
-    contents: [
-      ...history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
-      { role: 'user', parts: [{ text: message }] }
-    ],
-    config: {
-      systemInstruction,
-    },
-  });
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_TEXT,
+      contents: [
+        ...history.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
+        { role: 'user', parts: [{ text: message }] }
+      ],
+      config: {
+        systemInstruction,
+      },
+    });
 
-  return response.text || "Désolé, je n'ai pas pu générer de réponse.";
+    if (!response.text) {
+      console.warn("[TooluBaay] Model returned an empty response.");
+      return "Le conseiller est momentanément silencieux. Veuillez réessayer.";
+    }
+
+    return response.text;
+  } catch (error: any) {
+    console.error("[TooluBaay] Chat failure:", error);
+    
+    // Check for specific error types
+    const errorMsg = error.message || "";
+    if (errorMsg.includes("quota") || errorMsg.includes("429")) {
+      throw new Error("Limite de questions atteinte pour aujourd'hui. Veuillez patienter un peu.");
+    }
+    if (errorMsg.includes("API key") || errorMsg.includes("403")) {
+      throw new Error("Problème avec la clé API. Elle a peut-être été bloquée par Google.");
+    }
+    
+    throw new Error(`Erreur technique : ${errorMsg || "Impossible de contacter le conseiller."}`);
+  }
 };
 
 export const analyzePlantImage = async (dataUrlSource: string, weather?: WeatherData): Promise<DiagnosticResult> => {
