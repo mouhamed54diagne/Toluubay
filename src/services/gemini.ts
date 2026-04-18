@@ -1,22 +1,19 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { DiagnosticResult, WeatherData } from "../types";
 
-// Optimized access to Gemini API key with absolute fallback
+// Secure access to Gemini API key via environment variables
 const getApiKey = () => {
-  const platformKey = process.env.GEMINI_API_KEY;
+  // Try different ways the environment might provide the key
   const viteKey = import.meta.env.VITE_GEMINI_API_KEY;
-  const hardcodedKey = "AIzaSyC8KCjhpddNq37KqIzl-B7FInOuBIDIzwE";
+  const processKey = typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : undefined;
 
-  // Predicate for a valid-looking Gemini key (AIza... and long enough)
-  const isValid = (k?: string) => {
-    return typeof k === 'string' && k.startsWith('AIza') && k.length > 30;
-  };
+  // Validation helper
+  const isValid = (k?: string) => typeof k === 'string' && k.startsWith('AIza') && k.length > 30;
 
-  if (isValid(platformKey)) return platformKey!;
   if (isValid(viteKey)) return viteKey!;
+  if (isValid(processKey)) return processKey!;
   
-  // Guarantee a valid key format even if user hasn't configured platform secrets
-  return hardcodedKey;
+  return '';
 };
 
 const keyToUse = getApiKey();
