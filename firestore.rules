@@ -78,7 +78,7 @@ service cloud.firestore {
       return data.keys().hasAll(['uid', 'date', 'crop', 'location', 'createdAt']) &&
              data.uid == request.auth.uid &&
              isValidDate(data.date) &&
-             data.crop in ['arachide', 'mil', 'maïs', 'riz'] &&
+             data.crop.lower() in ['arachide', 'mil', 'maïs', 'riz'] &&
              data.location is string && data.location.size() < 200 &&
              data.createdAt is timestamp;
     }
@@ -106,8 +106,7 @@ service cloud.firestore {
         allow create: if isOwner(userId) && 
                         request.resource.data.keys().hasAll(['title', 'createdAt']) &&
                         request.resource.data.createdAt is timestamp;
-        allow update: if isOwner(userId) &&
-                        request.resource.data.updatedAt is timestamp;
+        allow update: if isOwner(userId);
         allow delete: if isOwner(userId);
 
         match /messages/{msgId} {

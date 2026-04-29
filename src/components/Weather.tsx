@@ -20,12 +20,12 @@ export default function Weather() {
   const indicators = [
     { label: 'Température', value: `${weather?.temp}°C`, icon: Thermometer, color: 'text-orange-500' },
     { label: 'Humidité', value: `${weather?.humidity}%`, icon: Droplets, color: 'text-blue-500' },
-    { label: 'Vent', value: '12 km/h', icon: Wind, color: 'text-gray-500' },
+    { label: 'Vent', value: `${weather?.windSpeed || 0} km/h`, icon: Wind, color: 'text-gray-500' },
     { label: 'Pluie utile', value: `${weather?.rainfall} mm`, icon: CloudSun, color: 'text-indigo-500' },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-serif italic">Météo Agricole</h2>
         <div className="flex bg-white rounded-full p-1 border border-[#1a1a1a]/10">
@@ -84,17 +84,55 @@ export default function Weather() {
       <div className="bg-white rounded-3xl p-6 border border-[#1a1a1a]/5 shadow-sm">
         <h4 className="text-sm font-bold uppercase tracking-widest mb-4">Prévisions 5 jours</h4>
         <div className="space-y-4">
-          {[1, 2, 3, 4, 5].map(day => (
-            <div key={day} className="flex items-center justify-between py-2 border-b border-[#f5f5f0] last:border-0">
-              <span className="text-sm font-medium w-12">J+{day}</span>
-              <CloudSun size={20} className="text-[#1a1a1a]/30" />
-              <div className="flex gap-3 text-sm">
-                <span className="font-bold">36°</span>
-                <span className="text-[#1a1a1a]/40">24°</span>
-              </div>
+          {weather?.forecast && weather.forecast.length > 0 ? (
+            weather.forecast.map((day, idx) => {
+              const date = new Date(day.date);
+              const label = idx === 0 ? "Aujourd'hui" : date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' });
+              
+              return (
+                <div key={idx} className="flex items-center justify-between py-3 border-b border-[#f5f5f0] last:border-0">
+                  <div className="w-24">
+                    <p className="text-sm font-bold text-[#1a1a1a]">{label}</p>
+                    <p className="text-[10px] text-[#1a1a1a]/40 uppercase">{day.condition}</p>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <div className="text-lg">
+                      {day.condition.includes('Pluie') ? '🌧️' : (day.condition.includes('nuageux') ? '⛅' : '☀️')}
+                    </div>
+                    {day.rainProbability > 10 && (
+                      <span className="text-[9px] font-bold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded-md">
+                        {day.rainProbability}%
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex gap-4 text-sm w-16 justify-end">
+                    <span className="font-bold text-[#1a1a1a]">{day.maxTemp}°</span>
+                    <span className="text-[#1a1a1a]/40">{day.minTemp}°</span>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="py-8 text-center bg-[#f5f5f0] rounded-2xl">
+              <p className="text-xs text-[#1a1a1a]/40 font-bold uppercase tracking-widest">
+                Chargement des prévisions...
+              </p>
             </div>
-          ))}
+          )}
         </div>
+      </div>
+
+      {/* Note au bas de la page pour éviter l'impression de "vide" */}
+      <div className="bg-[#5A5A40] rounded-3xl p-6 text-white shadow-md">
+        <div className="flex items-center gap-2 mb-2">
+          <Droplets size={16} className="text-blue-300" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-white/60">Note Agronomique</span>
+        </div>
+        <p className="text-xs leading-relaxed italic">
+          "Les données de vent et de pluie sont essentielles pour planifier vos épandages. Un vent supérieur à 15km/h peut nuire à l'efficacité des traitements."
+        </p>
       </div>
     </div>
   );

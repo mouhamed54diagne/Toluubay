@@ -52,7 +52,7 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
   // 2. Load Messages for current conversation
   useEffect(() => {
     if (!user || !currentConversationId) {
-      setMessages([{ role: 'model', content: "Salam! Je suis TooluBaay, votre conseiller agricole. Commencez une nouvelle discussion pour m'interroger." }]);
+      setMessages([]);
       return;
     }
 
@@ -60,15 +60,10 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
     const q = query(collection(db, path), orderBy('timestamp', 'asc'), limit(50));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (snapshot.metadata.hasPendingWrites) return; 
-      
       const data = snapshot.docs.map(doc => doc.data() as ChatMessage);
-      if (data.length > 0) {
-        setMessages(data);
-      } else {
-        setMessages([{ role: 'model', content: "Mame Boye! Posez votre question sur cette nouvelle discussion." }]);
-      }
+      setMessages(data);
     }, (error) => {
+      console.error("Messages list error", error);
       handleFirestoreError(error, OperationType.LIST, path);
     });
 
@@ -119,12 +114,12 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
     setIsLoading(true);
     try {
       const reader = new FileReader();
+      const mimeType = blob.type || 'audio/webm';
       reader.onloadend = async () => {
         const base64 = (reader.result as string).split(',')[1];
-        const transcription = await transcribeAudio(base64, language);
+        const transcription = await transcribeAudio(base64, language, mimeType);
         if (transcription) {
           setInput(transcription);
-          // Auto-send could be placed here if desired
         }
       };
       reader.readAsDataURL(blob);
@@ -136,10 +131,12 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
   };
 
   const createNewConversation = async () => {
-    if (!user) return;
+    if (!user) return null;
     setIsLoading(true);
     const path = `users/${user.uid}/conversations`;
     try {
+      // Add a small delay for Firestore auth stabilization in PWA
+      await new Promise(r => setTimeout(r, 100));
       const newConv = await addDoc(collection(db, path), {
         title: "Nouvelle Discussion",
         createdAt: serverTimestamp(),
@@ -148,8 +145,11 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
       setCurrentConversationId(newConv.id);
       setShowHistory(false);
       setMessages([]);
+      return newConv.id;
     } catch (e) {
+      console.error("[TooluBaay] Failed to create conv:", e);
       handleFirestoreError(e, OperationType.CREATE, path);
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -169,26 +169,27 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
     }
   };
 
-  const saveMessage = async (msg: ChatMessage) => {
+  const saveMessage = async (msg: ChatMessage, overrideConversationId?: string) => {
     const user = auth.currentUser;
-    if (!user || !currentConversationId) return;
+    const convId = overrideConversationId || currentConversationId;
+    if (!user || !convId) return;
     
     // If it's the first message of a "Nouvelle Discussion", update the title
     if (messages.length <= 1 && msg.role === 'user') {
-      const convPath = `users/${user.uid}/conversations/${currentConversationId}`;
+      const convPath = `users/${user.uid}/conversations/${convId}`;
       updateDoc(doc(db, convPath), { 
         title: msg.content.substring(0, 30) + (msg.content.length > 30 ? '...' : ''),
         updatedAt: serverTimestamp()
       }).catch(console.error);
     } else {
       // Just update updatedAt
-      const convPath = `users/${user.uid}/conversations/${currentConversationId}`;
+      const convPath = `users/${user.uid}/conversations/${convId}`;
       updateDoc(doc(db, convPath), { 
         updatedAt: serverTimestamp()
       }).catch(console.error);
     }
 
-    const path = `users/${user.uid}/conversations/${currentConversationId}/messages`;
+    const path = `users/${user.uid}/conversations/${convId}/messages`;
     try {
       await addDoc(collection(db, path), {
         ...msg,
@@ -202,27 +203,29 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
-    // Ensure we have a conversation
-    if (!currentConversationId) {
-      await createNewConversation();
+    let convId = currentConversationId;
+
+    if (!convId) {
+      convId = await createNewConversation();
+      if (!convId) return;
     }
 
     const userMessageContent = input;
     setInput('');
     
-    // Optimistic local update
     const userMsg: ChatMessage = { 
       role: 'user', 
       content: userMessageContent,
       timestamp: { seconds: Date.now() / 1000 }
     };
     
-    setMessages(prev => [...prev, userMsg]);
+    // Instant local update
+    setMessages(prev => [...prev.filter(m => m.content !== userMessageContent), userMsg]);
     setIsLoading(true);
 
     try {
-      // 1. Save user message to Firestore (background)
-      saveMessage(userMsg);
+      // 1. Save user msg
+      saveMessage(userMsg, convId);
 
       // 2. Chat with AI
       const historyForAI = messages.map(m => ({ role: m.role, content: m.content }));
@@ -235,17 +238,17 @@ export default function Chatbot({ user }: { user: FirebaseUser | null }) {
           timestamp: { seconds: Date.now() / 1000 }
         };
         
-        // Optimistic update for AI response
+        // Instant local update for model response
         setMessages(prev => [...prev, modelMsg]);
         
-        // 3. Save AI response to Firestore
-        await saveMessage(modelMsg);
+        // 3. Save model msg
+        await saveMessage(modelMsg, convId);
       }
     } catch (error: any) {
       console.error("[Chatbot] handleSend error:", error);
       const errorMsg: ChatMessage = { 
         role: 'model', 
-        content: `Désolé, j'ai rencontré un problème : ${error.message || "Erreur inconnue"}.`
+        content: `Désolé: ${error.message || "Erreur"}.`
       };
       setMessages(prev => [...prev, errorMsg]);
     } finally {

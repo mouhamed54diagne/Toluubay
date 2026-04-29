@@ -1,49 +1,47 @@
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI, Modality, ThinkingLevel } from "@google/genai";
 import { DiagnosticResult, WeatherData } from "../types";
 
-// Secure access to Gemini API key via environment variables
-const getApiKey = () => {
-  // Try different ways the environment might provide the key
-  const viteKey = import.meta.env.VITE_GEMINI_API_KEY;
-  const processKey = typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : undefined;
+let lastAiError: string | null = null;
 
-  // Validation helper
-  const isValid = (k?: string) => typeof k === 'string' && k.startsWith('AIza') && k.length > 30;
+export const getLastAiError = () => lastAiError;
 
-  if (isValid(viteKey)) return viteKey!;
-  if (isValid(processKey)) return processKey!;
+const setAiError = (error: any) => {
+  const msg = error instanceof Error ? error.message : String(error);
+  lastAiError = msg;
+  console.error("[TooluBaay AI Error]", msg);
+};
+
+// Robust key retrieval with multiple fallbacks
+export const getSafeKey = (): string => {
+  // Use the key you provided as the absolute reference
+  const REAL_KEY = 'AIzaSyCtgF13h4b7ATasM1_PqeshTew_DXaA30k';
   
-  return '';
+  const envKey = (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || 
+                 (import.meta as any).env.VITE_GEMINI_API_KEY || 
+                 '';
+
+  // If the key from the environment is missing or is just a placeholder, use YOUR real key.
+  if (!envKey || envKey.trim() === '' || envKey.includes('MY_GEMINI_API_KEY')) {
+    return REAL_KEY;
+  }
+  
+  return envKey.trim();
 };
 
-const keyToUse = getApiKey();
-// Safe logging for debugging key presence
-if (keyToUse && keyToUse.length > 8) {
-  console.log(`[TooluBaay] AI Engine initialized with key: ${keyToUse.substring(0, 4)}...${keyToUse.substring(keyToUse.length - 4)}`);
-} else {
-  console.warn("[TooluBaay] AI Engine: Missing or invalid API key.");
-}
+export const keyToUse = getSafeKey();
+const ai = new GoogleGenAI({ apiKey: keyToUse });
 
-let ai: GoogleGenAI;
-try {
-  ai = new GoogleGenAI({ apiKey: keyToUse || 'INVALID_KEY' });
-} catch (e) {
-  console.error("[TooluBaay] Failed to initialize Gemini SDK:", e);
-  // Create a dummy instance to avoid crashes on export usage
-  ai = new GoogleGenAI({ apiKey: 'DUMMY_KEY' });
-}
-
-const MODEL_TEXT = "gemini-3.1-flash-lite-preview";
-const MODEL_TTS = "gemini-3.1-flash-tts-preview";
+// Standardized model names for TooluBaay
+const MODEL_TEXT = "gemini-3-flash-preview";
 const MODEL_VISION = "gemini-3-flash-preview";
+const MODEL_TTS = "gemini-3.1-flash-tts-preview";
 
-// Helper to check key availability
-const hasApiKey = () => {
-  const key = getApiKey();
-  return !!(key && key.length > 5);
+export const hasApiKey = () => {
+  return typeof keyToUse === 'string' && keyToUse.length > 15;
 };
 
-console.log("[TooluBaay] AI Status:", hasApiKey() ? "Key Linked" : "Key Missing");
+// Log initialization status (safely)
+console.log(`[TooluBaay] System initialized. AI: ${hasApiKey() ? "Ready" : "Offline"}`);
 
 /**
  * Adds a WAV header to raw PCM data.
@@ -101,53 +99,66 @@ function addWavHeader(base64Pcm: string, sampleRate = 24000): string {
   return URL.createObjectURL(blob);
 }
 
+// Exponential backoff helper for retrying AI calls on transient errors
+const withRetry = async <T>(fn: () => Promise<T>, retries = 3, delay = 1200): Promise<T> => {
+  try {
+    return await fn();
+  } catch (error: any) {
+    // 503 is Service Unavailable (high demand), 429 is Resource Exhausted (quota)
+    const isRetryable = error?.message?.includes('503') || error?.message?.includes('UNAVAILABLE') || 
+                        error?.status === 'UNAVAILABLE' || error?.message?.includes('429');
+    
+    if (retries > 0 && isRetryable) {
+      console.warn(`[TooluBaay] Model busy, retrying in ${delay}ms... (${retries} attempts left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return withRetry(fn, retries - 1, delay * 2);
+    }
+    throw error;
+  }
+};
+
 export const chatWithAI = async (message: string, language: string, history: { role: 'user' | 'model', content: string }[]) => {
   if (!hasApiKey()) {
-    console.error("[TooluBaay] Attempted to chat without a valid API key.");
-    throw new Error("Clé API Gemini non trouvée ou invalide. Veuillez vérifier votre configuration.");
+    throw new Error("Clé API Gemini non trouvée.");
   }
   
-  const systemInstruction = `Tu es TooluBaay, un conseiller agricole expert au Sénégal. 
-  Tu parles en ${language}. 
-  Réponds de manière concise et pratique.`;
+  const systemInstruction = `Tu es TooluBaay, un conseiller agricole expert au Sénégal. Tu parles en ${language}. Réponds de manière concise et pratique.`;
 
-  try {
-    console.log(`[Gemini] Calling ${MODEL_TEXT} for language: ${language}`);
-    // Limit history to the 5 last messages to save quota/tokens
-    const recentHistory = history.slice(-5);
+  const runChat = async () => {
+    // Limit history to the 5 last messages and filter out empty ones
+    const recentHistory = history
+      .filter(h => h.content && h.content.trim().length > 0)
+      .slice(-5);
     
+    // Standardize structure for maximum compatibility
+    const contents = [
+      ...recentHistory.map(h => ({ role: h.role === 'model' ? 'model' : 'user', parts: [{ text: h.content }] })),
+      { role: 'user', parts: [{ text: message }] }
+    ];
+
     const response = await ai.models.generateContent({
       model: MODEL_TEXT,
-      contents: [
-        ...recentHistory.map(h => ({ role: h.role, parts: [{ text: h.content }] })),
-        { role: 'user', parts: [{ text: message }] }
-      ],
+      contents,
       config: {
         systemInstruction,
       },
     });
 
-    console.log("[Gemini] Response received:", response.text ? "Success" : "Empty");
-    
     if (!response.text) {
-      console.warn("[TooluBaay] Model returned an empty response.");
-      return "Le conseiller est momentanément silencieux. Veuillez réessayer.";
+      throw new Error("Empty AI response");
     }
 
     return response.text;
+  };
+
+  try {
+    return await withRetry(runChat);
   } catch (error: any) {
-    console.error("[TooluBaay] Chat failure:", error);
-    
-    // Check for specific error types
-    const errorMsg = error.message || "";
-    if (errorMsg.includes("quota") || errorMsg.includes("429")) {
-      throw new Error("Limite de questions atteinte pour aujourd'hui. Veuillez patienter un peu.");
+    setAiError(error);
+    if (error?.message?.includes('503') || error?.status === 'UNAVAILABLE') {
+       return "Le service est temporairement surchargé. Veuillez patienter une minute et réessayer votre question.";
     }
-    if (errorMsg.includes("API key") || errorMsg.includes("403")) {
-      throw new Error("Problème avec la clé API. Elle a peut-être été bloquée par Google.");
-    }
-    
-    throw new Error(`Erreur technique : ${errorMsg || "Impossible de contacter le conseiller."}`);
+    throw error;
   }
 };
 
@@ -159,44 +170,42 @@ export const analyzePlantImage = async (dataUrlSource: string, weather?: Weather
   const mimeType = dataUrlSource.includes(';') ? dataUrlSource.split(';')[0].split(':')[1] : 'image/jpeg';
   const base64Image = dataUrlSource.includes(',') ? dataUrlSource.split(',')[1] : dataUrlSource;
 
-  let weatherContext = "";
-  if (weather) {
-    weatherContext = `Météo actuelle: ${weather.temp}°C, ${weather.condition}.`;
-  }
-
-  const prompt = `Analyse cette photo de plante pour TooluBaay. ${weatherContext}
-  Identifie la maladie ou le stress.
-  Réponds au format JSON suivant:
+  const prompt = `Analyse cette photo de plante pour TooluBaay. ${weather ? `Météo: ${weather.temp}°C, ${weather.condition}.` : ''}
+  Identifie la maladie. Réponds UNIQUEMENT en JSON:
   {
-    "disease": "Nom du problème",
-    "confidence": 0.95,
-    "description": "Description courte",
-    "treatment": "Traitement recommandé",
-    "prevention": "Conseils de prévention"
+    "disease": "Nom",
+    "confidence": 0.9,
+    "description": "...",
+    "treatment": "...",
+    "prevention": "..."
   }`;
 
-  const response = await ai.models.generateContent({
-    model: MODEL_TEXT,
-    contents: {
-      parts: [
-        { inlineData: { data: base64Image, mimeType } },
-        { text: prompt }
-      ]
-    },
-    config: {
-      responseMimeType: "application/json",
-    }
-  });
+  const runAnalysis = async () => {
+    const response = await ai.models.generateContent({
+      model: MODEL_VISION,
+      contents: {
+        parts: [
+          { inlineData: { data: base64Image, mimeType } },
+          { text: prompt }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+      }
+    });
+
+    return JSON.parse(response.text || "{}");
+  };
 
   try {
-    return JSON.parse(response.text || "{}");
+    return await withRetry(runAnalysis);
   } catch (e) {
-    console.error("Erreur parsing JSON Gemini", e);
+    setAiError(e);
     return {
       disease: "Analyse impossible",
       confidence: 0,
-      description: "L'image n'a pas pu être traitée correctement.",
-      treatment: "Veuillez reprendre une photo plus claire.",
+      description: "Le service est peut-être surchargé ou l'image n'est pas claire. Veuillez réessayer plus tard.",
+      treatment: "Veuillez reprendre une photo.",
       prevention: "N/A"
     };
   }
@@ -210,48 +219,64 @@ export const generateIntelligentInsight = async (
 ): Promise<string> => {
   if (!hasApiKey()) return "Veuillez configurer votre clé API.";
 
-  const prompt = `En tant que TooluBaay, donne un conseil stratégique court (2 phrases) en ${language} pour la culture ${crop} (${stage}) avec météo: ${weather.temp}°C, ${weather.condition}.`;
+  const prompt = `Conseil expert pour ${crop} (${stage}). Météo: ${weather.temp}°C, ${weather.condition}. Réponds en ${language} (2 phrases max).`;
 
-  try {
+  const runInsight = async () => {
     const response = await ai.models.generateContent({
       model: MODEL_TEXT,
-      contents: [{ text: prompt }],
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
     });
-    return response.text || "Préparez vos prochaines étapes culturelles.";
+    return response.text || "Suivez les recommandations saisonnières.";
+  };
+
+  try {
+    return await withRetry(runInsight);
   } catch (e) {
-    console.error("Erreur Insight", e);
-    return "Optimisation météo momentanément indisponible.";
+    setAiError(e);
+    return "Surveillez votre culture et adaptez l'arrosage à la météo actuelle.";
   }
 };
 
-export const transcribeAudio = async (base64Audio: string, language: string): Promise<string> => {
+export const transcribeAudio = async (base64Audio: string, language: string, mimeType: string = "audio/webm"): Promise<string> => {
   if (!hasApiKey()) return "";
 
-  const prompt = `Transcris fidèlement l'audio ci-joint. 
-  IMPORTANT: Réponds UNIQUEMENT par le texte transcrit. 
-  Ne dis PAS "Voici la transcription", ne fais AUCUN commentaire.
-  Si tu n'entends rien, ne réponds rien.
-  Langue: ${language}.`;
+  const prompt = `TRANSCRIPTION VERBATIM (STRICTEMENT MOT À MOT) :
+  Transcris exactement chaque mot prononcé dans cet audio. 
+  NE CORRIGE PAS la grammaire, NE RÉSUME PAS, NE TRADUIS PAS.
+  Si la langue est le Wolof, Sérère ou Pulaar, transcris dans cette langue.
+  IMPORTANT: Réponds UNIQUEMENT par le texte brut. 
+  Pas de commentaires, pas d'introduction.
+  Langue cible : ${language}.`;
 
-  const response = await ai.models.generateContent({
-    model: MODEL_TEXT,
-    contents: {
-      parts: [
-        { inlineData: { data: base64Audio, mimeType: "audio/webm" } },
-        { text: prompt }
-      ]
-    }
-  });
+  const runTranscription = async () => {
+    const response = await ai.models.generateContent({
+      model: MODEL_TEXT,
+      contents: {
+        parts: [
+          { inlineData: { data: base64Audio, mimeType } },
+          { text: prompt }
+        ]
+      },
+    });
 
-  let text = response.text || "";
-  
-  // Nettoyage de sécurité au cas où le modèle reste bavard
-  text = text.replace(/Voici la transcription[:\s]*/i, '')
-             .replace(/La transcription est[:\s]*/i, '')
-             .replace(/^"|"$/g, '') // Enlever les guillemets éventuels
-             .trim();
-             
-  return text;
+    let text = response.text || "";
+    
+    // Nettoyage de sécurité
+    text = text.replace(/Voici la transcription[:\s]*/i, '')
+               .replace(/La transcription est[:\s]*/i, '')
+               .replace(/^"|"$/g, '') 
+               .trim();
+               
+    return text;
+  };
+
+  try {
+    return await withRetry(runTranscription);
+  } catch (e) {
+    console.error("Transcription Error:", e);
+    setAiError(e);
+    return "";
+  }
 };
 
 export const textToSpeech = async (text: string, language: string) => {
@@ -260,7 +285,7 @@ export const textToSpeech = async (text: string, language: string) => {
   // Map codes to full language names for better model understanding
   const langName = language === 'wo' ? 'Wolof' : (language === 'fr' ? 'Français' : language);
 
-  try {
+  const runTTS = async () => {
     const response = await ai.models.generateContent({
       model: "gemini-3.1-flash-tts-preview",
       // Direct instruction to minimize generation latency
@@ -280,8 +305,14 @@ export const textToSpeech = async (text: string, language: string) => {
     if (base64Audio) {
       return addWavHeader(base64Audio);
     }
+    throw new Error("No audio generated");
+  };
+
+  try {
+    return await withRetry(runTTS);
   } catch (e) {
     console.error("TTS Error", e);
+    setAiError(e);
   }
   return null;
 };

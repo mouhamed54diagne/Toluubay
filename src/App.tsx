@@ -3,19 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
-import Weather from './components/Weather';
-import Calendar from './components/Calendar';
-import Chatbot from './components/Chatbot';
-import Diagnostic from './components/Diagnostic';
-import FieldLog from './components/FieldLog';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { LogIn, Sprout, Loader2 } from 'lucide-react';
+
+// Lazy load heavy components to speed up initial dashboard mount
+const Weather = lazy(() => import('./components/Weather'));
+const Calendar = lazy(() => import('./components/Calendar'));
+const Chatbot = lazy(() => import('./components/Chatbot'));
+const Diagnostic = lazy(() => import('./components/Diagnostic'));
+const FieldLog = lazy(() => import('./components/FieldLog'));
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
@@ -24,19 +26,28 @@ export default function App() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   useEffect(() => {
-    // Fallback loading safety
-    const timeout = setTimeout(() => {
-      setLoading(false);
-    }, 6000);
+    // Global Error Listener for debugging environment issues
+    const handleError = (event: ErrorEvent) => {
+      console.error("[Fatal Error]", event.error);
+    };
+    window.addEventListener('error', handleError);
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      // Don't clear timeout here yet, keep it for overall app load
+      setUser(user);
+      setLoading(false);
+      
+      // Hide the instant splash screen once React takes over
+      const splash = document.getElementById('instant-splash');
+      if (splash) {
+        splash.style.opacity = '0';
+        splash.style.transition = 'opacity 0.5s ease';
+        setTimeout(() => {
+          if (splash.parentNode) splash.remove();
+        }, 500);
+      }
+      
       if (user) {
-        setUser(user);
-        setLoading(false);
-        clearTimeout(timeout);
-        
-        // Background check and registration
+        // Background registration (non-blocking)
         const checkUser = async () => {
           try {
             const userRef = doc(db, 'users', user.uid);
@@ -55,17 +66,10 @@ export default function App() {
           }
         };
         checkUser();
-      } else {
-        setUser(null);
-        setLoading(false);
-        clearTimeout(timeout);
       }
     });
 
-    return () => {
-      unsubscribe();
-      clearTimeout(timeout);
-    };
+    return () => unsubscribe();
   }, []);
 
   const handleLogin = async () => {
@@ -93,11 +97,18 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f5f5f0] flex flex-col items-center justify-center">
-        <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center mb-4 animate-bounce">
-          <Sprout size={32} className="text-[#5A5A40]" />
+      <div className="min-h-screen bg-[#f5f5f0] flex flex-col items-center justify-center animate-pulse">
+        <div className="w-24 h-24 mb-6">
+          <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="48" fill="white" stroke="#5A5A40" stroke-width="0.5"/>
+            <path d="M50 25C50 25 35 45 35 60C35 68.2843 41.7157 75 50 75C58.2843 75 65 68.2843 65 60C65 45 50 25 50 25Z" fill="#5A5A40" fill-opacity="0.1" stroke="#5A5A40" stroke-width="2"/>
+            <path d="M50 75V55" stroke="#5A5A40" stroke-width="2" stroke-linecap="round"/>
+            <path d="M40 60C40 60 45 60 50 55" stroke="#5A5A40" stroke-width="2" stroke-linecap="round"/>
+            <path d="M60 60C60 60 55 60 50 55" stroke="#5A5A40" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="50" cy="35" r="5" fill="#A8A878"/>
+          </svg>
         </div>
-        <p className="text-sm font-serif italic text-[#5A5A40]">TooluBaay...</p>
+        <h1 className="text-3xl font-serif italic text-[#5A5A40] letter-spacing-tight">TooluBaay</h1>
       </div>
     );
   }
@@ -129,22 +140,32 @@ export default function App() {
   }
 
   const renderContent = () => {
-    switch (activeTab) {
-      case 'home':
-        return <Dashboard user={user} onNavigate={setActiveTab} />;
-      case 'weather':
-        return <Weather />;
-      case 'calendar':
-        return <Calendar />;
-      case 'chat':
-        return <Chatbot user={user} />;
-      case 'diagnostic':
-        return <Diagnostic user={user} />;
-      case 'log':
-        return <FieldLog user={user} />;
-      default:
-        return <Dashboard onNavigate={setActiveTab} />;
-    }
+    return (
+      <Suspense fallback={
+        <div className="flex-1 flex items-center justify-center bg-[#f5f5f0]">
+          <Loader2 size={24} className="animate-spin text-[#5A5A40]/20" />
+        </div>
+      }>
+        {(() => {
+          switch (activeTab) {
+            case 'home':
+              return <Dashboard user={user} onNavigate={setActiveTab} />;
+            case 'weather':
+              return <Weather />;
+            case 'calendar':
+              return <Calendar />;
+            case 'chat':
+              return <Chatbot user={user} />;
+            case 'diagnostic':
+              return <Diagnostic user={user} />;
+            case 'log':
+              return <FieldLog user={user} />;
+            default:
+              return <Dashboard user={user} onNavigate={setActiveTab} />;
+          }
+        })()}
+      </Suspense>
+    );
   };
 
   return (

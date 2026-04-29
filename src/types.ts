@@ -1,11 +1,21 @@
 export type CropType = 'arachide' | 'mil' | 'maïs' | 'riz';
 
+export interface ForecastDay {
+  date: string;
+  maxTemp: number;
+  minTemp: number;
+  condition: string;
+  rainProbability: number;
+}
+
 export interface WeatherData {
   temp: number;
   humidity: number;
   rainfall: number;
+  windSpeed?: number;
   condition: string;
   location: string;
+  forecast?: ForecastDay[];
 }
 
 export interface CropStage {

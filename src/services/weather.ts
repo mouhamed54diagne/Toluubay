@@ -10,13 +10,14 @@ export const getWeatherData = async (location: string): Promise<WeatherData> => 
   
   try {
     const response = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`
+      `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto`
     );
     
     if (!response.ok) throw new Error('Weather fetch failed');
     
     const data = await response.json();
     const current = data.current;
+    const daily = data.daily;
 
     // Convert WMO Weather Interpretation Codes
     const getCondition = (code: number) => {
@@ -25,15 +26,26 @@ export const getWeatherData = async (location: string): Promise<WeatherData> => 
       if (code <= 69) return 'Pluie';
       if (code <= 79) return 'Neige';
       if (code <= 99) return 'Orageux';
-      return 'Cloudy';
+      return 'Couvert';
     };
+
+    // Process forecast (next 5 days)
+    const forecast = daily.time.slice(0, 5).map((time: string, index: number) => ({
+      date: time,
+      maxTemp: Math.round(daily.temperature_2m_max[index]),
+      minTemp: Math.round(daily.temperature_2m_min[index]),
+      condition: getCondition(daily.weather_code[index]),
+      rainProbability: daily.precipitation_probability_max[index]
+    }));
 
     return {
       temp: Math.round(current.temperature_2m),
       humidity: current.relative_humidity_2m,
       rainfall: current.precipitation,
+      windSpeed: Math.round(current.wind_speed_10m),
       condition: getCondition(current.weather_code),
-      location: location
+      location: location,
+      forecast
     };
   } catch (error) {
     console.error('Error fetching weather:', error);
@@ -43,7 +55,8 @@ export const getWeatherData = async (location: string): Promise<WeatherData> => 
       humidity: 50,
       rainfall: 0,
       condition: 'Indisponible',
-      location: location
+      location: location,
+      forecast: []
     };
   }
 };
