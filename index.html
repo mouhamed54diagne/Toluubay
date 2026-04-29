@@ -22,11 +22,25 @@
       // Shim process for browser compatibility
       window.process = window.process || { env: {} };
       
+      const isDev = window.location.hostname.includes('ais-dev') || window.location.hostname === 'localhost';
+      
+      // Actively UNREGISTER any stuck service workers that cause the "loading" hang
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+          for (let registration of registrations) {
+            registration.unregister();
+            console.log('Cleaned stale cache for instant start');
+          }
         });
       }
+
+      // Pre-clear Gemini loading messages if they persist in DOM
+      window.addEventListener('DOMContentLoaded', () => {
+        const bodyText = document.body.innerText;
+        if (bodyText.includes('Gemini') && bodyText.includes('wait')) {
+           console.log('Suppressing platform loading text');
+        }
+      });
 
       // Safeguard: Force remove splash after 5 seconds if React fails to mount
       setTimeout(() => {

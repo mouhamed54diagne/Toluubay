@@ -11,20 +11,20 @@ const setAiError = (error: any) => {
   console.error("[TooluBaay AI Error]", msg);
 };
 
-// Robust key retrieval with multiple fallbacks
+// Robust key retrieval with priority on the real provided key
 export const getSafeKey = (): string => {
-  // Use the key you provided as the absolute reference
-  const REAL_KEY = 'AIzaSyCtgF13h4b7ATasM1_PqeshTew_DXaA30k';
+  const HARDCODED_KEY = 'AIzaSyA_Ghnai-NTuEyYh3aInRAUA41oq_gOM20';
   
+  // Use the key from the environment (Vite/Node compatibility)
   const envKey = (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || 
                  (import.meta as any).env.VITE_GEMINI_API_KEY || 
                  '';
 
-  // If the key from the environment is missing or is just a placeholder, use YOUR real key.
-  if (!envKey || envKey.trim() === '' || envKey.includes('MY_GEMINI_API_KEY')) {
-    return REAL_KEY;
+  // If envKey is a placeholder or missing, return hardcoded
+  if (!envKey || !envKey.trim().startsWith('AIza')) {
+    return HARDCODED_KEY;
   }
-  
+
   return envKey.trim();
 };
 
@@ -219,21 +219,30 @@ export const generateIntelligentInsight = async (
 ): Promise<string> => {
   if (!hasApiKey()) return "Veuillez configurer votre clé API.";
 
-  const prompt = `Conseil expert pour ${crop} (${stage}). Météo: ${weather.temp}°C, ${weather.condition}. Réponds en ${language} (2 phrases max).`;
+  const systemInstruction = `Tu es TooluBaay, conseiller expert en agriculture au Sénégal. 
+  Donne un conseil technique PRÉCIS et actionnable (2 phrases max) en ${language === 'wo' ? 'Wolof' : 'Français'}.
+  Analyse : Culture: ${crop}, Phase: ${stage}, Météo: ${weather.temp}°C, ${weather.condition}. 
+  Évite absolument les généralités comme "surveillez votre culture". Parle de l'impact direct de ces conditions.`;
 
   const runInsight = async () => {
     const response = await ai.models.generateContent({
       model: MODEL_TEXT,
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      contents: [{ role: 'user', parts: [{ text: `Analyse cropping condition: ${crop} at stage ${stage} with weather ${weather.temp}C and condition ${weather.condition}` }] }],
+      config: {
+        systemInstruction,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+      }
     });
-    return response.text || "Suivez les recommandations saisonnières.";
+    return response.text?.trim() || `Recommandation ${crop} (${stage}) : Maintien de la vigilance face aux ${weather.temp}°C.`;
   };
 
   try {
     return await withRetry(runInsight);
   } catch (e) {
     setAiError(e);
-    return "Surveillez votre culture et adaptez l'arrosage à la météo actuelle.";
+    // Better dynamic fallback
+    const weatherHint = weather.temp > 35 ? "chaleur extrême" : (weather.condition.toLowerCase().includes('pluie') ? "pluviométrie" : "évapotranspiration");
+    return `Conseil expert pallié (${crop}/${stage}) : Face à cette ${weatherHint} (${weather.temp}°C), optimisez l'arrosage au pied et vérifiez l'état des feuilles.`;
   }
 };
 

@@ -7,6 +7,34 @@ export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
     plugins: [react(), tailwindcss()],
+    optimizeDeps: {
+      include: [
+        'react', 
+        'react-dom', 
+        'firebase/app', 
+        'firebase/auth', 
+        'firebase/firestore', 
+        'motion/react', 
+        'lucide-react',
+        '@google/genai',
+        'recharts',
+        'd3'
+      ],
+    },
+    build: {
+      target: 'esnext',
+      sourcemap: false,
+      minify: 'esbuild',
+      cssMinify: true,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom'],
+            'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+          }
+        }
+      }
+    },
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || ''),
       'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || ''),

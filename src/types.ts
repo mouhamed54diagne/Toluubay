@@ -35,6 +35,7 @@ export interface DiagnosticResult {
 export interface FieldEntry {
   id: string;
   date: string;
+  createdAt?: any;
   crop: CropType;
   location: string;
   photoUrl?: string;

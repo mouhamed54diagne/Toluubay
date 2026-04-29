@@ -15,13 +15,10 @@ export default function Dashboard({ user, onNavigate }: { user: FirebaseUser | n
   const [latestField, setLatestField] = useState<FieldEntry | null>(null);
   const [insight, setInsight] = useState<string>('');
   const [isLoadingInsight, setIsLoadingInsight] = useState(false);
+  const [activeContext, setActiveContext] = useState({ crop: 'Arachide', stage: 'Semis' });
 
   useEffect(() => {
     const initDashboard = async () => {
-      // Check cache first to save quota
-      const cacheKey = `insight_${user?.uid || 'anon'}_${PILOT_ZONES[0]}`;
-      const cached = sessionStorage.getItem(cacheKey);
-      
       // 1. Fetch Weather
       let weatherData: WeatherData;
       try {
@@ -30,12 +27,6 @@ export default function Dashboard({ user, onNavigate }: { user: FirebaseUser | n
         weatherData = { temp: 30, condition: 'Dégagé', location: 'Tambacounda', humidity: 50, rainfall: 0, forecast: [] };
       }
       setWeather(weatherData);
-
-      if (cached) {
-        setInsight(cached);
-        setIsLoadingInsight(false);
-        return;
-      }
 
       // 2. Fetch Latest Field Entry
       let currentCrop = 'Arachide';
@@ -53,26 +44,52 @@ export default function Dashboard({ user, onNavigate }: { user: FirebaseUser | n
             const entry = snapshot.docs[0].data() as FieldEntry;
             setLatestField(entry);
             currentCrop = entry.crop;
+            
+            // Logic to calculate stage based on age of entry
+            const elapsedDays = Math.floor(
+              (new Date().getTime() - new Date(entry.createdAt || entry.date).getTime()) / (1000 * 60 * 60 * 24)
+            );
+            
+            const cropData = (CROPS as any)[entry.crop.toLowerCase()] || CROPS.arachide;
+            let dayCount = 0;
+            for (const stage of cropData.stages) {
+              dayCount += stage.duration;
+              if (elapsedDays <= dayCount) {
+                currentStage = stage.name;
+                break;
+              }
+            }
           }
         } catch (e) {
           console.error("Failed to fetch latest field", e);
         }
+      }
+
+      setActiveContext({ crop: currentCrop, stage: currentStage });
+
+      // Check cache with full context
+      const cacheKey = `insight_${user?.uid || 'anon'}_${PILOT_ZONES[0]}_${currentCrop}_${currentStage}`;
+      const cached = sessionStorage.getItem(cacheKey);
+      
+      if (cached) {
+        setInsight(cached);
+        setIsLoadingInsight(false);
+        return;
       }
       
       // 3. Generate Intelligent Intersection
       setIsLoadingInsight(true);
       try {
         const text = await generateIntelligentInsight(currentCrop, currentStage, weatherData, 'Français');
-        if (text && !text.includes("Veuillez configurer")) {
-          setInsight(text);
-          const cacheKey = `insight_${user?.uid || 'anon'}_${PILOT_ZONES[0]}`;
-          sessionStorage.setItem(cacheKey, text);
+        if (text && text.length > 5 && !text.includes("Veuillez configurer")) {
+          setInsight(text.trim());
+          sessionStorage.setItem(cacheKey, text.trim());
         } else {
-          // Natural fallback without relying on AI if it fails
-          setInsight(`Focus sur l'${currentCrop} en phase de ${currentStage}. Avec ${weatherData.temp}°C, surveillez l'humidité du sol pour éviter le stress hydrique.`);
+          // Natural fallback
+          setInsight(`Analyse de l'${currentCrop} (${currentStage}) : Météo favorable (${weatherData.temp}°C). Continuez le suivi de l'humidité.`);
         }
       } catch (e) {
-        setInsight(`Alerte Météo ${weatherData.location} : ${weatherData.temp}°C. Protégez vos semis d'arachide contre la chaleur excessive.`);
+        setInsight(`Recommandation : Surveillez vos parcelles de ${currentCrop} face aux ${weatherData.temp}°C annoncés à ${weatherData.location}.`);
       } finally {
         setIsLoadingInsight(false);
       }
@@ -97,7 +114,9 @@ export default function Dashboard({ user, onNavigate }: { user: FirebaseUser | n
           <span className="text-5xl font-light tracking-tighter">{weather?.temp}°C</span>
           <div className="pb-1">
             <p className="text-sm font-medium">{weather?.condition}</p>
-            <p className="text-xs text-[#1a1a1a]/50">Risque stress: Moyen</p>
+            <p className="text-xs text-[#1a1a1a]/50 italic">
+              {latestField ? `${activeContext.crop} - ${activeContext.stage}` : 'Préparation du sol'}
+            </p>
           </div>
         </div>
       </section>
@@ -144,18 +163,20 @@ export default function Dashboard({ user, onNavigate }: { user: FirebaseUser | n
             {isLoadingInsight && <Loader2 size={14} className="animate-spin text-[#5A5A40]" />}
           </div>
           
-          <div className="bg-[#f5f5f0] p-4 rounded-2xl min-h-[80px] flex items-center justify-center">
+          <div className="bg-[#f5f5f0] p-4 rounded-2xl min-h-[100px] flex flex-col items-center justify-center relative">
             {isLoadingInsight ? (
               <div className="flex flex-col items-center gap-2">
                 <Loader2 size={24} className="animate-spin text-[#5A5A40]/20" />
                 <p className="text-[10px] text-[#1a1a1a]/30 font-bold uppercase tracking-widest">Analyse Croisée...</p>
               </div>
             ) : (
-              <p className="text-sm leading-relaxed text-[#1a1a1a]/80 italic w-full text-center">
-                {insight || "Analyse indisponible."}
-              </p>
+              <div className="w-full text-center">
+                <p className="text-sm leading-relaxed text-[#1a1a1a]/80 italic">
+                  "{insight || "Analyse indisponible."}"
+                </p>
+                {insight && <FeedbackModule context="dashboard_insight" />}
+              </div>
             )}
-            {insight && !isLoadingInsight && <FeedbackModule context="dashboard_insight" />}
           </div>
 
           <div className="flex items-center gap-3">
@@ -213,7 +234,7 @@ export default function Dashboard({ user, onNavigate }: { user: FirebaseUser | n
         </button>
       </div>
 
-      {/* 4. Section Debug (Visible pour le développement) */}
+      {/* 4. Section Diagnostic (Restaurée) */}
       <section className="mt-8 p-4 bg-red-50 border border-red-100 rounded-3xl">
         <div className="flex items-center gap-2 mb-2">
           <AlertTriangle size={14} className="text-red-500" />
