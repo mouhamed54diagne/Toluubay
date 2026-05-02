@@ -11,9 +11,9 @@ const setAiError = (error: any) => {
   console.error("[TooluBaay AI Error]", msg);
 };
 
-// Robust key retrieval with priority on the real provided key
+// Robust key retrieval from environment variables
 export const getSafeKey = (): string => {
-  const HARDCODED_KEY = 'AIzaSyA_Ghnai-NTuEyYh3aInRAUA41oq_gOM20';
+  const HARDCODED_KEY = 'AIzaSyBxwXdLuRU0rHBVOltpucLjLUV9OrufnYM';
   
   // Use the key from the environment (Vite/Node compatibility)
   const envKey = (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || 
